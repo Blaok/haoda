@@ -8,8 +8,8 @@ import tempfile
 import xml.etree.ElementTree as ET
 import xml.sax.saxutils
 import zipfile
-from typing import (BinaryIO, ContextManager, Iterable, Mapping, Optional,
-                    TextIO, Tuple, Union)
+from typing import (BinaryIO, Iterable, Iterator, Mapping, Optional, TextIO,
+                    Tuple, Union)
 
 from haoda import util
 
@@ -37,7 +37,7 @@ class Vivado(subprocess.Popen):
         '-tclargs', *args
     ]
     pipe_args = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE}
-    super().__init__(cmd_args, cwd=self.cwd.name, **pipe_args)
+    super().__init__(cmd_args, cwd=self.cwd.name, **pipe_args)  # type: ignore
 
   def __exit__(self, *args) -> None:
     super().__exit__(*args)
@@ -61,7 +61,7 @@ class VivadoHls(subprocess.Popen):
       tcl_file.write(commands)
     cmd_args = ['vivado_hls', '-f', tcl_file.name]
     pipe_args = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE}
-    super().__init__(cmd_args, cwd=self.cwd.name, **pipe_args)
+    super().__init__(cmd_args, cwd=self.cwd.name, **pipe_args)  # type: ignore
 
   def __exit__(self, *args) -> None:
     super().__exit__(*args)
@@ -244,6 +244,9 @@ def get_device_info(platform_path: str):
   Args:
     platform_path: Path to the platform directory, e.g.,
         '/opt/xilinx/platforms/xilinx_u200_qdma_201830_2'.
+
+  Raises:
+    ValueError: If cannot parse the platform properly.
   """
   device_name = os.path.basename(platform_path)
   with zipfile.ZipFile(os.path.join(platform_path, 'hw',
@@ -251,14 +254,20 @@ def get_device_info(platform_path: str):
     with platform.open(device_name + '.hpfm') as metadata:
       platform_info = ET.parse(metadata).find('./xd:component/xd:platformInfo',
                                               XILINX_XML_NS)
+      if platform_info is None:
+        raise ValueError('cannot parse platform')
+      clock_period = platform_info.find(
+          "./xd:systemClocks/xd:clock/[@xd:id='0']", XILINX_XML_NS)
+      if clock_period is None:
+        raise ValueError('cannot find clock period in platform')
+      part_num = platform_info.find('xd:deviceInfo', XILINX_XML_NS)
+      if part_num is None:
+        raise ValueError('cannot find part number in platform')
       return {
           'clock_period':
-              platform_info.find("./xd:systemClocks/xd:clock/[@xd:id='0']",
-                                 XILINX_XML_NS).attrib[
-                                     '{{{xd}}}period'.format(**XILINX_XML_NS)],
+              clock_period.attrib['{{{xd}}}period'.format(**XILINX_XML_NS)],
           'part_num':
-              platform_info.find('xd:deviceInfo', XILINX_XML_NS).attrib[
-                  '{{{xd}}}name'.format(**XILINX_XML_NS)]
+              part_num.attrib['{{{xd}}}name'.format(**XILINX_XML_NS)]
       }
 
 
@@ -629,7 +638,7 @@ class VerilogPrinter(util.Printer):
     self.println('parameter {} = {};'.format(key, value))
 
   @contextlib.contextmanager
-  def initial(self) -> ContextManager[None]:
+  def initial(self) -> Iterator[None]:
     self.println('initial begin')
     self.do_indent()
     yield
@@ -637,7 +646,7 @@ class VerilogPrinter(util.Printer):
     self.println('end')
 
   @contextlib.contextmanager
-  def always(self, condition: str) -> ContextManager[None]:
+  def always(self, condition: str) -> Iterator[None]:
     self.println('always @ (%s) begin' % condition)
     self.do_indent()
     yield
@@ -645,7 +654,7 @@ class VerilogPrinter(util.Printer):
     self.println('end')
 
   @contextlib.contextmanager
-  def if_(self, condition: str) -> ContextManager[None]:
+  def if_(self, condition: str) -> Iterator[None]:
     self.println('if (%s) begin' % condition)
     self.do_indent()
     yield
