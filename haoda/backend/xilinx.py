@@ -339,14 +339,12 @@ def print_kernel_xml(top_name: str,
 
 
 BRAM_FIFO_TEMPLATE = r'''
-module {name}_w{width}_d{depth}_A
-#(parameter
+module {name} #(parameter
   MEM_STYLE   = "block",
   DATA_WIDTH  = {width},
   ADDR_WIDTH  = {addr_width},
   DEPTH       = {depth}
-)
-(
+)(
   // system signal
   input  wire                  clk,
   input  wire                  reset,
@@ -490,16 +488,17 @@ endmodule
 '''
 
 SRL_FIFO_TEMPLATE = r'''
-module {name}_w{width}_d{depth}_A_shiftReg (
+module {name}_shiftReg #(parameter
+  DATA_WIDTH = 32'd{width};
+  ADDR_WIDTH = 32'd{addr_width};
+  DEPTH      = {depth_width}'d{depth};
+)(
   clk,
   data,
   ce,
   a,
-  q);
-
-parameter DATA_WIDTH = 32'd{width};
-parameter ADDR_WIDTH = 32'd{addr_width};
-parameter DEPTH = {depth_width}'d{depth};
+  q
+);
 
 input clk;
 input [DATA_WIDTH-1:0] data;
@@ -524,7 +523,12 @@ assign q = SRL_SIG[a];
 
 endmodule
 
-module {name}_w{width}_d{depth}_A (
+module {name} #(parameter
+  MEM_STYLE   = "shiftreg";
+  DATA_WIDTH  = 32'd{width};
+  ADDR_WIDTH  = 32'd{addr_width};
+  DEPTH       = {depth_width}'d{depth};
+)(
   clk,
   reset,
   if_empty_n,
@@ -534,12 +538,8 @@ module {name}_w{width}_d{depth}_A (
   if_full_n,
   if_write_ce,
   if_write,
-  if_din);
-
-parameter MEM_STYLE   = "shiftreg";
-parameter DATA_WIDTH  = 32'd{width};
-parameter ADDR_WIDTH  = 32'd{addr_width};
-parameter DEPTH     = {depth_width}'d{depth};
+  if_din
+);
 
 input clk;
 input reset;
@@ -593,17 +593,17 @@ end
 assign shiftReg_addr = mOutPtr[ADDR_WIDTH] == 1'b0 ? mOutPtr[ADDR_WIDTH-1:0]:{{ADDR_WIDTH{{1'b0}}}};
 assign shiftReg_ce = (if_write & if_write_ce) & internal_full_n;
 
-{name}_w{width}_d{depth}_A_shiftReg
-#(
+{name}_shiftReg #(
   .DATA_WIDTH(DATA_WIDTH),
   .ADDR_WIDTH(ADDR_WIDTH),
-  .DEPTH(DEPTH))
-U_{name}_w{width}_d{depth}_A_ram (
+  .DEPTH(DEPTH)
+) U_{name}_ram (
   .clk(clk),
   .data(shiftReg_data),
   .ce(shiftReg_ce),
   .a(shiftReg_addr),
-  .q(shiftReg_q));
+  .q(shiftReg_q)
+);
 
 endmodule
 '''
@@ -682,18 +682,18 @@ class VerilogPrinter(util.Printer):
   def fifo_module(self,
                   width: int,
                   depth: int,
-                  name: str = 'fifo',
+                  name: str = '',
                   threshold: int = 1024) -> None:
     """Generate FIFO with the given parameters.
 
-    Generate an FIFO module named {name}_w{width}_d{depth}_A. If its capacity
-    is larger than threshold, BRAM FIFO will be used. Otherwise, SRL FIFO will
-    be used.
+    Generate an FIFO module. If its capacity is larger than threshold, BRAM FIFO
+        will be used. Otherwise, SRL FIFO will be used.
 
     Args:
       width: FIFO width.
       depth: FIFO depth.
-      name: Optionally give the fifo a name prefix, default to 'fifo'.
+      name: Optionally give the fifo a name, default to
+          'fifo_w{width}_d{depth}_A'.
       threshold: Optionally give a threshold to decide whether to use BRAM or
           SRL. Defaults to 1024 bits.
 
@@ -705,43 +705,48 @@ class VerilogPrinter(util.Printer):
     else:
       self.srl_fifo_module(width, depth)
 
-  def bram_fifo_module(self, width: int, depth: int,
-                       name: str = 'fifo') -> None:
+  def bram_fifo_module(self, width: int, depth: int, name: str = '') -> None:
     """Generate BRAM FIFO with the given parameters.
 
-    Generate a BRAM FIFO module named {name}_w{width}_d{depth}_A.
+    Generate a BRAM FIFO module.
 
     Args:
       width: FIFO width.
       depth: FIFO depth.
-      name: Optionally give the fifo a name prefix, default to 'fifo'.
+      name: Optionally give the fifo a name, default to
+          'fifo_w{width}_d{depth}_A'.
 
     Raises:
       ValueError: If depth or width is invalid.
     """
     if depth < 2:
       raise ValueError('Invalid BRAM FIFO depth: %d < 1' % depth)
+    if not name:
+      name = 'fifo_w{width}_d{depth}_A'.format(width=width, depth=depth)
     self._out.write(
         BRAM_FIFO_TEMPLATE.format(width=width,
                                   depth=depth,
                                   name=name,
                                   addr_width=(depth - 1).bit_length()))
 
-  def srl_fifo_module(self, width: int, depth: int, name: str = 'fifo') -> None:
+  def srl_fifo_module(self, width: int, depth: int, name: str = '') -> None:
     """Generate SRL FIFO with the given parameters.
 
-    Generate a SRL FIFO module named {name}_w{width}_d{depth}_A.
+    Generate a SRL FIFO module.
 
     Args:
       width: FIFO width.
       depth: FIFO depth.
-      name: Optionally give the fifo a name prefix, default to 'fifo'.
+      name: Optionally give the fifo a name, default to
+          'fifo_w{width}_d{depth}_A'.
 
     Raises:
       ValueError: If depth or width is invalid.
     """
     if depth < 2:
       raise ValueError('Invalid SRL FIFO depth: %d < 1' % depth)
+    if not name:
+      name = 'fifo_w{width}_d{depth}_A'.format(width=width, depth=depth)
     addr_width = (depth - 1).bit_length()
     self._out.write(
         SRL_FIFO_TEMPLATE.format(width=width,
