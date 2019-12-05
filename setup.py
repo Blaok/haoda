@@ -37,4 +37,5 @@ setup(
     ],
     packages=find_packages(exclude=('tests',)),
     python_requires='>=3.5',
+    install_requires=['cached_property'],
 )
