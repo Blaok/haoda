@@ -1,0 +1,31 @@
+name: release
+
+on:
+  [push, pull_request]
+
+jobs:
+  publish:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v1
+      - name: Setup Python
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.5
+      - name: Install package
+        run: python setup.py install
+      - name: Run unit tests
+        run: python -m unittest
+      - name: Install wheel
+        run: pip install wheel
+      - name: Build package
+        run: python setup.py sdist bdist_wheel
+      - name: Publish to PyPI
+        if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.pypi_password }}
