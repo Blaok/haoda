@@ -1,5 +1,6 @@
 import collections
 import contextlib
+import glob
 import logging
 import os
 import subprocess
@@ -226,6 +227,11 @@ class RunHls(VivadoHls):
           tar.add(os.path.join(solution_dir, 'syn/verilog'), arcname='hdl')
           tar.add(os.path.join(solution_dir, self.cwd.name, 'vivado_hls.log'),
                   arcname='log/' + self.solution_name + '.log')
+          for pattern in ('*.sched.adb.xml', '*.verbose.sched.rpt',
+                          '*.verbose.sched.rpt.xml'):
+            for f in glob.glob(
+                os.path.join(solution_dir, '.autopilot', 'db', pattern)):
+              tar.add(f, arcname='report/' + os.path.basename(f))
         except FileNotFoundError as e:
           self.returncode = 1
           _logger.error('%s', e)
