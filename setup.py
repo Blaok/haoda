@@ -6,8 +6,9 @@ See:
 https://github.com/Blaok/haoda
 """
 
-from setuptools import setup, find_packages
 from os import path
+
+from setuptools import find_packages, setup
 
 here = path.abspath(path.dirname(__file__))
 
@@ -16,7 +17,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='haoda',
-    version='0.0.20191204.dev1',
+    version='0.0.20191220.dev1',
     description='Hardware-aware optimization and design automation',
     long_description=long_description,
     long_description_content_type='text/markdown',
