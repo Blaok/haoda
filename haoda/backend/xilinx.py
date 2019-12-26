@@ -344,16 +344,18 @@ def print_kernel_xml(top_name: str,
       KERNEL_XML_TEMPLATE.format(top_name=top_name, ports=ports, args=args))
 
 
-BRAM_FIFO_TEMPLATE = r'''
-module {name} #(parameter
-  MEM_STYLE   = "block",
-  DATA_WIDTH  = {width},
-  ADDR_WIDTH  = {addr_width},
-  DEPTH       = {depth}
-)(
-  // system signal
-  input  wire                  clk,
-  input  wire                  reset,
+BRAM_FIFO_TEMPLATE = '''`default_nettype none
+
+// first-word fall-through (FWFT) FIFO using block RAM
+// based on HLS generated code
+module {name} #(
+  parameter MEM_STYLE  = "block",
+  parameter DATA_WIDTH = {width},
+  parameter ADDR_WIDTH = {addr_width},
+  parameter DEPTH      = {depth}
+) (
+  input wire clk,
+  input wire reset,
 
   // write
   output wire                  if_full_n,
@@ -370,77 +372,77 @@ module {name} #(parameter
 
 (* ram_style = MEM_STYLE *)
 reg  [DATA_WIDTH-1:0] mem[0:DEPTH-1];
-reg  [DATA_WIDTH-1:0] q_buf = 1'b0;
-reg  [ADDR_WIDTH-1:0] waddr = 1'b0;
-reg  [ADDR_WIDTH-1:0] raddr = 1'b0;
+reg  [DATA_WIDTH-1:0] q_buf;
+reg  [ADDR_WIDTH-1:0] waddr;
+reg  [ADDR_WIDTH-1:0] raddr;
 wire [ADDR_WIDTH-1:0] wnext;
 wire [ADDR_WIDTH-1:0] rnext;
 wire                  push;
 wire                  pop;
-reg  [ADDR_WIDTH-1:0] usedw = 1'b0;
-reg                   full_n = 1'b1;
-reg                   empty_n = 1'b0;
-reg  [DATA_WIDTH-1:0] q_tmp = 1'b0;
-reg                   show_ahead = 1'b0;
-reg  [DATA_WIDTH-1:0] dout_buf = 1'b0;
-reg                   dout_valid = 1'b0;
+reg  [ADDR_WIDTH-1:0] used;
+reg                   full_n;
+reg                   empty_n;
+reg  [DATA_WIDTH-1:0] q_tmp;
+reg                   show_ahead;
+reg  [DATA_WIDTH-1:0] dout_buf;
+reg                   dout_valid;
+
+localparam DepthM1 = DEPTH[ADDR_WIDTH-1:0] - 1'd1;
 
 assign if_full_n  = full_n;
 assign if_empty_n = dout_valid;
 assign if_dout    = dout_buf;
 assign push       = full_n & if_write_ce & if_write;
 assign pop        = empty_n & if_read_ce & (~dout_valid | if_read);
-assign wnext      = !push                ? waddr :
-                    (waddr == DEPTH - 1) ? 1'b0  :
-                    waddr + 1'b1;
-assign rnext      = !pop                 ? raddr :
-                    (raddr == DEPTH - 1) ? 1'b0  :
-                    raddr + 1'b1;
+assign wnext      = !push              ? waddr              :
+                    (waddr == DepthM1) ? {{ADDR_WIDTH{{1'b0}}}} : waddr + 1'd1;
+assign rnext      = !pop               ? raddr              :
+                    (raddr == DepthM1) ? {{ADDR_WIDTH{{1'b0}}}} : raddr + 1'd1;
 
 // waddr
 always @(posedge clk) begin
-  if (reset == 1'b1)
-    waddr <= 1'b0;
+  if (reset)
+    waddr <= {{ADDR_WIDTH{{1'b0}}}};
   else
     waddr <= wnext;
 end
 
 // raddr
 always @(posedge clk) begin
-  if (reset == 1'b1)
-    raddr <= 1'b0;
+  if (reset)
+    raddr <= {{ADDR_WIDTH{{1'b0}}}};
   else
     raddr <= rnext;
 end
 
-// usedw
+// used
 always @(posedge clk) begin
-  if (reset == 1'b1)
-    usedw <= 1'b0;
-  else if (push & ~pop)
-    usedw <= usedw + 1'b1;
-  else if (~push & pop)
-    usedw <= usedw - 1'b1;
+  if (reset)
+    used <= {{ADDR_WIDTH{{1'b0}}}};
+  else if (push && !pop)
+    used <= used + 1'b1;
+  else if (!push && pop)
+    used <= used - 1'b1;
 end
 
 // full_n
 always @(posedge clk) begin
-  if (reset == 1'b1)
+  if (reset)
     full_n <= 1'b1;
-  else if (push & ~pop)
-    full_n <= (usedw != DEPTH - 1);
-  else if (~push & pop)
+  else if (push && !pop)
+    full_n <= (used != DepthM1);
+  else if (!push && pop)
     full_n <= 1'b1;
 end
 
 // empty_n
 always @(posedge clk) begin
-  if (reset == 1'b1)
+  if (reset)
     empty_n <= 1'b0;
-  else if (push & ~pop)
+  else if (push && !pop)
     empty_n <= 1'b1;
-  else if (~push & pop)
-    empty_n <= (usedw != 1'b1);
+  else if (!push && pop)
+    empty_n <= (used != {{{{(ADDR_WIDTH-1){{1'b0}}}},1'b1}});
 end
 
 // mem
@@ -456,17 +458,17 @@ end
 
 // q_tmp
 always @(posedge clk) begin
-  if (reset == 1'b1)
-    q_tmp <= 1'b0;
+  if (reset)
+    q_tmp <= {{DATA_WIDTH{{1'b0}}}};
   else if (push)
     q_tmp <= if_din;
 end
 
 // show_ahead
 always @(posedge clk) begin
-  if (reset == 1'b1)
+  if (reset)
     show_ahead <= 1'b0;
-  else if (push && usedw == pop)
+  else if (push && used == {{{{(ADDR_WIDTH-1){{1'b0}}}},pop}})
     show_ahead <= 1'b1;
   else
     show_ahead <= 1'b0;
@@ -474,15 +476,15 @@ end
 
 // dout_buf
 always @(posedge clk) begin
-  if (reset == 1'b1)
-    dout_buf <= 1'b0;
+  if (reset)
+    dout_buf <= {{DATA_WIDTH{{1'b0}}}};
   else if (pop)
     dout_buf <= show_ahead? q_tmp : q_buf;
 end
 
 // dout_valid
 always @(posedge clk) begin
-  if (reset == 1'b1)
+  if (reset)
     dout_valid <= 1'b0;
   else if (pop)
     dout_valid <= 1'b1;
@@ -490,128 +492,166 @@ always @(posedge clk) begin
     dout_valid <= 1'b0;
 end
 
-endmodule
+endmodule  // fifo_bram
+
+`default_nettype wire
 '''
 
-SRL_FIFO_TEMPLATE = r'''
-module {name}_shiftReg #(parameter
-  DATA_WIDTH = 32'd{width};
-  ADDR_WIDTH = 32'd{addr_width};
-  DEPTH      = {depth_width}'d{depth};
-)(
-  clk,
-  data,
-  ce,
-  a,
-  q
+SRL_FIFO_TEMPLATE = '''`default_nettype none
+
+// first-word fall-through (FWFT) FIFO using shift register LUT
+// based on HLS generated code
+module {name} #(
+  parameter MEM_STYLE  = "shiftreg",
+  parameter DATA_WIDTH = {width},
+  parameter ADDR_WIDTH = {addr_width},
+  parameter DEPTH      = {depth}
+) (
+  input wire clk,
+  input wire reset,
+
+  // write
+  output wire                  if_full_n,
+  input  wire                  if_write_ce,
+  input  wire                  if_write,
+  input  wire [DATA_WIDTH-1:0] if_din,
+
+  // read
+  output wire                  if_empty_n,
+  input  wire                  if_read_ce,
+  input  wire                  if_read,
+  output wire [DATA_WIDTH-1:0] if_dout
 );
 
-input clk;
-input [DATA_WIDTH-1:0] data;
-input ce;
-input [ADDR_WIDTH-1:0] a;
-output [DATA_WIDTH-1:0] q;
+  wire [ADDR_WIDTH - 1:0] shift_reg_addr;
+  wire [DATA_WIDTH - 1:0] shift_reg_data;
+  wire [DATA_WIDTH - 1:0] shift_reg_q;
+  wire                    shift_reg_ce;
+  reg  [ADDR_WIDTH:0]     out_ptr;
+  reg                     internal_empty_n;
+  reg                     internal_full_n;
 
-reg[DATA_WIDTH-1:0] SRL_SIG [0:DEPTH-1];
-integer i;
+  reg [DATA_WIDTH-1:0] mem [0:DEPTH-1];
 
-always @ (posedge clk)
-  begin
-    if (ce)
-    begin
-      for (i=0;i<DEPTH-1;i=i+1)
-        SRL_SIG[i+1] <= SRL_SIG[i];
-      SRL_SIG[0] <= data;
-    end
-  end
+  assign if_empty_n = internal_empty_n;
+  assign if_full_n = internal_full_n;
+  assign shift_reg_data = if_din;
+  assign if_dout = shift_reg_q;
 
-assign q = SRL_SIG[a];
+  assign shift_reg_addr = out_ptr[ADDR_WIDTH] == 1'b0 ? out_ptr[ADDR_WIDTH-1:0] : {{ADDR_WIDTH{{1'b0}}}};
+  assign shift_reg_ce = (if_write & if_write_ce) & internal_full_n;
 
-endmodule
+  assign shift_reg_q = mem[shift_reg_addr];
 
-module {name} #(parameter
-  MEM_STYLE   = "shiftreg";
-  DATA_WIDTH  = 32'd{width};
-  ADDR_WIDTH  = 32'd{addr_width};
-  DEPTH       = {depth_width}'d{depth};
-)(
-  clk,
-  reset,
-  if_empty_n,
-  if_read_ce,
-  if_read,
-  if_dout,
-  if_full_n,
-  if_write_ce,
-  if_write,
-  if_din
-);
-
-input clk;
-input reset;
-output if_empty_n;
-input if_read_ce;
-input if_read;
-output[DATA_WIDTH - 1:0] if_dout;
-output if_full_n;
-input if_write_ce;
-input if_write;
-input[DATA_WIDTH - 1:0] if_din;
-
-wire[ADDR_WIDTH - 1:0] shiftReg_addr ;
-wire[DATA_WIDTH - 1:0] shiftReg_data, shiftReg_q;
-wire           shiftReg_ce;
-reg[ADDR_WIDTH:0] mOutPtr = ~{{(ADDR_WIDTH+1){{1'b0}}}};
-reg internal_empty_n = 0, internal_full_n = 1;
-
-assign if_empty_n = internal_empty_n;
-assign if_full_n = internal_full_n;
-assign shiftReg_data = if_din;
-assign if_dout = shiftReg_q;
-
-always @ (posedge clk) begin
-  if (reset == 1'b1)
-  begin
-    mOutPtr <= ~{{ADDR_WIDTH+1{{1'b0}}}};
-    internal_empty_n <= 1'b0;
-    internal_full_n <= 1'b1;
-  end
-  else begin
-    if (((if_read & if_read_ce) == 1 & internal_empty_n == 1) &&
-      ((if_write & if_write_ce) == 0 | internal_full_n == 0))
-    begin
-      mOutPtr <= mOutPtr - {depth_width}'d1;
-      if (mOutPtr == {depth_width}'d0)
-        internal_empty_n <= 1'b0;
+  always @(posedge clk) begin
+    if (reset) begin
+      out_ptr <= ~{{ADDR_WIDTH+1{{1'b0}}}};
+      internal_empty_n <= 1'b0;
       internal_full_n <= 1'b1;
-    end
-    else if (((if_read & if_read_ce) == 0 | internal_empty_n == 0) &&
-      ((if_write & if_write_ce) == 1 & internal_full_n == 1))
-    begin
-      mOutPtr <= mOutPtr + {depth_width}'d1;
-      internal_empty_n <= 1'b1;
-      if (mOutPtr == DEPTH - {depth_width}'d2)
-        internal_full_n <= 1'b0;
+    end else begin
+      if (((if_read && if_read_ce) && internal_empty_n) &&
+          (!(if_write && if_write_ce) || !internal_full_n)) begin
+        out_ptr <= out_ptr - 1'b1;
+        if (out_ptr == {{(ADDR_WIDTH+1){{1'b0}}}})
+          internal_empty_n <= 1'b0;
+        internal_full_n <= 1'b1;
+      end
+      else if (((if_read & if_read_ce) == 0 | internal_empty_n == 0) &&
+        ((if_write & if_write_ce) == 1 & internal_full_n == 1))
+      begin
+        out_ptr <= out_ptr + 1'b1;
+        internal_empty_n <= 1'b1;
+        if (out_ptr == DEPTH - {{{{(ADDR_WIDTH-1){{1'b0}}}}, 2'd2}})
+          internal_full_n <= 1'b0;
+      end
     end
   end
-end
 
-assign shiftReg_addr = mOutPtr[ADDR_WIDTH] == 1'b0 ? mOutPtr[ADDR_WIDTH-1:0]:{{ADDR_WIDTH{{1'b0}}}};
-assign shiftReg_ce = (if_write & if_write_ce) & internal_full_n;
+  integer i;
+  always @(posedge clk) begin
+    if (shift_reg_ce) begin
+      for (i = 0; i < DEPTH - 1; i = i + 1)
+        mem[i + 1] <= mem[i];
+      mem[0] <= shift_reg_data;
+    end
+  end
 
-{name}_shiftReg #(
-  .DATA_WIDTH(DATA_WIDTH),
-  .ADDR_WIDTH(ADDR_WIDTH),
-  .DEPTH(DEPTH)
-) U_{name}_ram (
-  .clk(clk),
-  .data(shiftReg_data),
-  .ce(shiftReg_ce),
-  .a(shiftReg_addr),
-  .q(shiftReg_q)
+endmodule  // fifo_srl
+
+`default_nettype wire
+'''
+
+AUTO_FIFO_TEMPLATE = '''`default_nettype none
+
+// first-word fall-through (FWFT) FIFO
+// if its capacity > 1024 bits, it uses block RAM, otherwise it will uses shift
+// register LUT
+module {name} #(
+  parameter DATA_WIDTH = 32,
+  parameter ADDR_WIDTH = 5,
+  parameter DEPTH      = 32
+) (
+  input wire clk,
+  input wire reset,
+
+  // write
+  output wire                  if_full_n,
+  input  wire                  if_write_ce,
+  input  wire                  if_write,
+  input  wire [DATA_WIDTH-1:0] if_din,
+
+  // read
+  output wire                  if_empty_n,
+  input  wire                  if_read_ce,
+  input  wire                  if_read,
+  output wire [DATA_WIDTH-1:0] if_dout
 );
 
-endmodule
+generate
+  if (DATA_WIDTH * DEPTH > 1024) begin : bram
+    fifo_bram #(
+      .DATA_WIDTH(DATA_WIDTH),
+      .ADDR_WIDTH(ADDR_WIDTH),
+      .DEPTH     (DEPTH)
+    ) unit (
+      .clk  (clk),
+      .reset(reset),
+
+      .if_full_n  (if_full_n),
+      .if_write_ce(if_write_ce),
+      .if_write   (if_write),
+      .if_din     (if_din),
+
+      .if_empty_n(if_empty_n),
+      .if_read_ce(if_read_ce),
+      .if_read   (if_read),
+      .if_dout   (if_dout)
+    );
+  end else begin : srl
+    fifo_srl #(
+      .DATA_WIDTH(DATA_WIDTH),
+      .ADDR_WIDTH(ADDR_WIDTH),
+      .DEPTH     (DEPTH)
+    ) unit (
+      .clk  (clk),
+      .reset(reset),
+
+      .if_full_n  (if_full_n),
+      .if_write_ce(if_write_ce),
+      .if_write   (if_write),
+      .if_din     (if_din),
+
+      .if_empty_n(if_empty_n),
+      .if_read_ce(if_read_ce),
+      .if_read   (if_read),
+      .if_dout   (if_dout)
+    );
+  end
+endgenerate
+
+endmodule  // fifo
+
+`default_nettype wire
 '''
 
 
