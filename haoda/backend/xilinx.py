@@ -78,6 +78,7 @@ add_files -norecurse [glob {hdl_dir}/*.v]
 foreach tcl_file [glob -nocomplain {hdl_dir}/*.tcl] {{
   source ${{tcl_file}}
 }}
+set_property top {top_name} [current_fileset]
 update_compile_order -fileset sources_1
 update_compile_order -fileset sim_1
 ipx::package_project -root_dir ${{tmp_ip_dir}} -vendor xilinx.com -library RTLKernel -taxonomy /KernelIP -import_files -set_current false
