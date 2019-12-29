@@ -178,7 +178,7 @@ class RunHls(VivadoHls):
 
   Args:
     tarfileobj: File object that will contain the reports and HDL files.
-    kernel_files: File names of the kernels.
+    kernel_files: File names or tuple of file names and cflags of the kernels.
     top_name: Top-level module name.
     clock_period: Target clock period.
     part_num: Target part number.
@@ -186,7 +186,7 @@ class RunHls(VivadoHls):
 
   def __init__(self,
                tarfileobj: BinaryIO,
-               kernel_files: Iterable[str],
+               kernel_files: Iterable[Union[str, Tuple[str, str]]],
                top_name: str,
                clock_period: str,
                part_num: str,
@@ -195,25 +195,23 @@ class RunHls(VivadoHls):
     self.project_name = 'project'
     self.solution_name = top_name
     self.tarfileobj = tarfileobj
+    kernels = []
+    for kernel_file in kernel_files:
+      if isinstance(kernel_file, str):
+        kernels.append(
+            'add_files "{}" -cflags "-std=c++11"'.format(kernel_file))
+      else:
+        kernels.append(
+            'add_files "{}" -cflags "-std=c++11 {}"'.format(*kernel_file))
     kwargs = {
-        'project_dir':
-            self.project_dir.name,
-        'project_name':
-            self.project_name,
-        'solution_name':
-            self.solution_name,
-        'top_name':
-            top_name,
-        'add_kernels':
-            '\n'.join(
-                map('add_files "{}" -cflags "-std=c++11"'.format,
-                    kernel_files)),
-        'part_num':
-            part_num,
-        'clock_period':
-            clock_period,
-        'reset_level':
-            'low' if reset_low else 'high',
+        'project_dir': self.project_dir.name,
+        'project_name': self.project_name,
+        'solution_name': self.solution_name,
+        'top_name': top_name,
+        'add_kernels': '\n'.join(kernels),
+        'part_num': part_num,
+        'clock_period': clock_period,
+        'reset_level': 'low' if reset_low else 'high',
     }
     super().__init__(HLS_COMMANDS.format(**kwargs))
 
