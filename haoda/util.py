@@ -2,7 +2,7 @@ import contextlib
 import logging
 import os
 import signal
-from typing import (Any, ContextManager, Iterable, Optional, TextIO, Tuple,
+from typing import (Any, Generator, Iterable, List, Optional, TextIO, Tuple,
                     TypeVar, Union)
 
 T = TypeVar('T')
@@ -35,7 +35,7 @@ class Printer:
     self._out = out
     self._indent = 0
     self._assign = 0
-    self._comments = []
+    self._comments = []  # type: List[str]
     self._tab = 2
 
   def println(self, line: str = '', indent: int = -1) -> None:
@@ -103,8 +103,9 @@ class CppPrinter(Printer):
       self.un_indent()
 
   @contextlib.contextmanager
-  def for_(self, *args: Union[Tuple[str, str, str], Tuple[str, str]]
-          ) -> ContextManager[None]:
+  def for_(
+      self, *args: Union[Tuple[str, str, str], Tuple[str, str]]
+  ) -> Generator[None, None, None]:
     """Print a C++ for loop.
 
     Args:
@@ -126,7 +127,7 @@ class CppPrinter(Printer):
     self.println('}')
 
   @contextlib.contextmanager
-  def do_while(self, cond: str) -> ContextManager[None]:
+  def do_while(self, cond: str) -> Generator[None, None, None]:
     self.println('do {')
     self.do_indent()
     yield
@@ -134,7 +135,7 @@ class CppPrinter(Printer):
     self.println('}} while ({});'.format(cond))
 
   @contextlib.contextmanager
-  def if_(self, cond: str) -> ContextManager[None]:
+  def if_(self, cond: str) -> Generator[None, None, None]:
     self.println('if ({}) {{'.format(cond))
     self.do_indent()
     yield
@@ -142,14 +143,14 @@ class CppPrinter(Printer):
     self.println('}')
 
   @contextlib.contextmanager
-  def elif_(self, cond: str) -> ContextManager[None]:
+  def elif_(self, cond: str) -> Generator[None, None, None]:
     self.un_indent()
     self.println('}} else if ({}) {{'.format(cond))
     self.do_indent()
     yield
 
   @contextlib.contextmanager
-  def else_(self) -> ContextManager[None]:
+  def else_(self) -> Generator[None, None, None]:
     self.un_indent()
     self.println('} else {')
     self.do_indent()
@@ -158,16 +159,16 @@ class CppPrinter(Printer):
 
 def print_define(printer: CppPrinter, var: str, val: str) -> None:
   printer.println('#ifndef %s' % var)
-  printer.println('#define %s %d' % (var, val))
-  printer.println('#endif//%s' % var)
+  printer.println('#define %s %s' % (var, val))
+  printer.println('#endif  //%s' % var)
 
 
 def print_guard(printer: CppPrinter, var: str, val: str) -> None:
   printer.println('#ifdef %s' % var)
-  printer.println('#if %s != %d' % (var, val))
-  printer.println('#error %s != %d' % (var, val))
-  printer.println('#endif//%s != %d' % (var, val))
-  printer.println('#endif//%s' % var)
+  printer.println('#if %s != %s' % (var, val))
+  printer.println('#error %s != %s' % (var, val))
+  printer.println('#endif  //%s != %s' % (var, val))
+  printer.println('#endif  //%s' % var)
 
 
 def get_c_type(haoda_type: str) -> str:
@@ -288,7 +289,7 @@ def lst2str(idx: Iterable[Any]) -> str:
   return '[%s]' % ', '.join(map(str, idx))
 
 
-def add_inv(idx: Iterable[T]) -> Tuple[T, ...]:
+def add_inv(idx: Iterable[int]) -> Tuple[int, ...]:
   return tuple(-x for x in idx)
 
 
@@ -329,8 +330,8 @@ def timeout(seconds: int = 1, error_message: str = 'Timeout'):
   signal.alarm(0)
 
 
-def get_job_server_fd(job_server_fd: Union[int, Tuple[()], None]
-                     ) -> Optional[int]:
+def get_job_server_fd(
+    job_server_fd: Union[int, Tuple[()], None]) -> Optional[int]:
   """Get the job server file descriptor from env var if input is a tuple.
 
   Args:
@@ -349,8 +350,8 @@ def get_job_server_fd(job_server_fd: Union[int, Tuple[()], None]
 
 
 # pylint: disable=bad-whitespace
-def acquire_job_slot(job_server_fd: Union[int, Tuple[()], None] = ()
-                    ) -> Optional[int]:
+def acquire_job_slot(job_server_fd: Union[int, Tuple[()],
+                                          None] = ()) -> Optional[int]:
   """Acquire a job slot if input is not None.
 
   Args:
@@ -367,8 +368,8 @@ def acquire_job_slot(job_server_fd: Union[int, Tuple[()], None] = ()
 
 
 # pylint: disable=bad-whitespace
-def release_job_slot(job_server_fd: Union[int, Tuple[()], None] = ()
-                    ) -> Optional[int]:
+def release_job_slot(job_server_fd: Union[int, Tuple[()],
+                                          None] = ()) -> Optional[int]:
   """Release a job slot if input is not None.
 
   Args:
