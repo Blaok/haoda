@@ -8,6 +8,22 @@ from typing import (Any, Generator, Iterable, List, Optional, TextIO, Tuple,
 T = TypeVar('T')
 
 TYPE_WIDTH = {'float': 32, 'double': 64, 'half': 16}
+HAODA_TYPE_TO_CL_TYPE = {
+    'uint8': 'uchar',
+    'uint16': 'ushort',
+    'uint32': 'uint',
+    'uint64': 'ulong',
+    'int8': 'char',
+    'int16': 'short',
+    'int32': 'int',
+    'int64': 'long',
+    'half': 'half',
+    'float': 'float',
+    'double': 'double',
+    'float16': 'half',
+    'float32': 'float',
+    'float64': 'double',
+}
 
 _logger = logging.getLogger().getChild(__name__)
 
@@ -191,6 +207,25 @@ def get_c_type(haoda_type: str) -> str:
       assert len(bits) == 1
       return 'ap_{}<{}>'.format(token, *bits)
   return haoda_type
+
+
+def get_cl_type(haoda_type: Optional[str]) -> Optional[str]:
+  if haoda_type is None:
+    return None
+
+  cl_type = HAODA_TYPE_TO_CL_TYPE.get(haoda_type)
+  if cl_type is not None:
+    return cl_type
+  return haoda_type + '_t'
+
+
+def get_cl_vec_type(haoda_type: str, burst_width: int) -> str:
+  scalar_width = get_width_in_bits(haoda_type)
+  assert (burst_width % scalar_width == 0
+         ), "burst width must be a multiple of width of the scalar type"
+  assert (haoda_type in HAODA_TYPE_TO_CL_TYPE), "scalar type not supported"
+
+  return HAODA_TYPE_TO_CL_TYPE[haoda_type] + str(burst_width // scalar_width)
 
 
 def get_haoda_type(c_type: str) -> str:
