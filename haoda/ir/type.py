@@ -1,53 +1,62 @@
-class HaodaType:
+import haoda.util
 
-  def get_c_type(haoda_type: str) -> str:
-    if haoda_type in {
+TYPE_WIDTH = {'float': 32, 'double': 64, 'half': 16}
+
+class Type:
+  
+  def __init__(self, t: str):
+    self.val = t
+
+  def get_c_type(self) -> str:
+    if self.val in {
         'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64'
     }:
-      return haoda_type + '_t'
-    if haoda_type is None:
+      return self.val + '_t'
+    if self.val is None:
       return None
-    if haoda_type == 'float32':
+    if self.val == 'float32':
       return 'float'
-    if haoda_type == 'float64':
+    if self.val == 'float64':
       return 'double'
     for token in ('int', 'uint'):
-      if haoda_type.startswith(token):
-        bits = haoda_type.replace(token, '').split('_')
+      if self.val.startswith(token):
+        bits = self.val.replace(token, '').split('_')
         if len(bits) > 1:
           assert len(bits) == 2
           return 'ap_{}<{}, {}>'.format(token.replace('int', 'fixed'), *bits)
         assert len(bits) == 1
         return 'ap_{}<{}>'.format(token, *bits)
-    return haoda_type
+    return self.val
 
-  def get_width_in_bits(haoda_type: str) -> int:
-    if isinstance(haoda_type, str):
-      if haoda_type in TYPE_WIDTH:
-        return TYPE_WIDTH[haoda_type]
+  def get_width_in_bits(self) -> int:
+    if isinstance(self.val, str):
+      if self.val in TYPE_WIDTH:
+        return TYPE_WIDTH[self.val]
       for prefix in 'uint', 'int', 'float':
-        if haoda_type.startswith(prefix):
-          return int(haoda_type.lstrip(prefix).split('_')[0])
+        if self.val.startswith(prefix):
+          return int(self.val.lstrip(prefix).split('_')[0])
     else:
-      if hasattr(haoda_type, 'haoda_type'):
-        return get_width_in_bits(haoda_type.haoda_type)
-    raise InternalError('unknown haoda type: %s' % haoda_type)
+      if hasattr(self.val, 'haoda_type'):
+        return self.get_width_in_bits(self.val.haoda_type)
+    raise haoda.util.InternalError('unknown haoda type: %s' % self.val)
 
-  def get_width_in_bytes(haoda_type: str) -> int:
-    return (get_width_in_bits(haoda_type) - 1) // 8 + 1
+  def get_width_in_bytes(self) -> int:
+    return (self.get_width_in_bits() - 1) // 8 + 1
 
-  def same_type(lhs: str, rhs: str) -> bool:
-    if is_float(lhs):
-      width = TYPE_WIDTH.get(lhs)
+  def __eq__(self, other) -> bool:
+    if not isinstance(other, Type):
+      return NotImplemented
+    if self.is_float():
+      width = TYPE_WIDTH.get(self.val)
       if width is not None:
-        lhs = 'float%d' % width
-    if is_float(rhs):
-      width = TYPE_WIDTH.get(rhs)
+        self.val = 'float%d' % width
+    if other.is_float():
+      width = TYPE_WIDTH.get(other.val)
       if width is not None:
-        rhs = 'float%d' % width
-    return lhs == rhs
+        other.val = 'float%d' % width
+    return self.val == other.val
 
-  def common_type(lhs: str, rhs: str) -> str:
+  def common_type(self, other: Type) -> str:
     """Return the common type of two operands.
 
     TODO: Consider fractional.
@@ -59,21 +68,21 @@ class HaodaType:
     Returns:
       The common type of two operands.
     """
-    if is_float(lhs) and not is_float(rhs):
-      return lhs
-    if is_float(rhs) and not is_float(lhs):
-      return rhs
-    if get_width_in_bits(lhs) < get_width_in_bits(rhs):
-      return rhs
-    return lhs
+    if self.is_float() and not other.is_float():
+      return self.val
+    if other.is_float() and not self.is_float():
+      return other.val
+    if self.get_width_in_bits() < other.get_width_in_bits():
+      return other.val
+    return self.val
 
-  def is_float(haoda_type: str) -> bool:
-    return haoda_type in {'half', 'double'} or haoda_type.startswith('float')
+  def is_float(self) -> bool:
+    return self.val in {'half', 'double'} or self.val.startswith('float')
 
-  def is_fixed(haoda_type: str) -> bool:
+  def is_fixed(self) -> bool:
     for token in ('int', 'uint'):
-      if haoda_type.startswith(token):
-        bits = haoda_type.replace(token, '').split('_')
+      if self.val.startswith(token):
+        bits = self.val.replace(token, '').split('_')
         if len(bits) > 1:
           return True
     return False

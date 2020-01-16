@@ -7,8 +7,6 @@ from typing import (Any, ContextManager, Iterable, Optional, TextIO, Tuple,
 
 T = TypeVar('T')
 
-TYPE_WIDTH = {'float': 32, 'double': 64, 'half': 16}
-
 _logger = logging.getLogger().getChild(__name__)
 
 
