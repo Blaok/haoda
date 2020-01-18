@@ -56,7 +56,7 @@ class Type:
         other.val = 'float%d' % width
     return self.val == other.val
 
-  def common_type(self, other: Type) -> str:
+  def common_type(self, other) -> str:
     """Return the common type of two operands.
 
     TODO: Consider fractional.
