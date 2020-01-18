@@ -2,6 +2,20 @@ from typing import Any
 
 import haoda.util
 
+class cached_property(object):
+  """
+  Descriptor (non-data) for building an attribute on-demand on first use.
+  """
+  def __init__(self, factory):
+    self._attr_name = factory.__name__
+    self._factory = factory
+
+  def __get__(self, instance, owner):
+    attr = self._factory(instance)
+    setattr(instance, self._attr_name, attr)
+    return attr
+
+
 TYPE_WIDTH = {'float': 32, 'double': 64, 'half': 16}
 
 class Type:
@@ -9,7 +23,8 @@ class Type:
   def __init__(self, t: str):
     self._val = t
 
-  def get_c_type(self) -> str:
+  @cached_property
+  def c_type(self) -> str:
     if self._val in {
         'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64'
     }:
@@ -30,7 +45,8 @@ class Type:
         return 'ap_{}<{}>'.format(token, *bits)
     return self._val
 
-  def get_width_in_bits(self) -> int:
+  @cached_property
+  def width_in_bits(self) -> int:
     if isinstance(self._val, str):
       if self._val in TYPE_WIDTH:
         return TYPE_WIDTH[self._val]
@@ -39,11 +55,12 @@ class Type:
           return int(self._val.lstrip(prefix).split('_')[0])
     else:
       if hasattr(self._val, 'haoda_type'):
-        return self.get_width_in_bits(self._val.haoda_type)
+        return self._val.haoda_type.width_in_bits
     raise haoda.util.InternalError('unknown haoda type: %s' % self._val)
 
-  def get_width_in_bytes(self) -> int:
-    return (self.get_width_in_bits() - 1) // 8 + 1
+  @cached_property
+  def width_in_bytes(self) -> int:
+    return (self.width_in_bits - 1) // 8 + 1
 
   def __eq__(self, other: Any) -> bool:
     if not isinstance(other, Type):
@@ -51,7 +68,7 @@ class Type:
         other = Type(other)
       else:
         return NotImplemented
-    if self.is_float():
+    if self.is_float:
       width = TYPE_WIDTH.get(self._val)
       if width is not None:
         self._val = 'float%d' % width
@@ -73,17 +90,19 @@ class Type:
     Returns:
       The common type of two operands.
     """
-    if self.is_float() and not other.is_float():
+    if self.is_float and not other.is_float:
       return self
-    if other.is_float() and not self.is_float():
+    if other.is_float and not self.is_float:
       return other
-    if self.get_width_in_bits() < other.get_width_in_bits():
+    if self.width_in_bits < other.width_in_bits:
       return other
     return self
 
+  @cached_property
   def is_float(self) -> bool:
     return self._val in {'half', 'double'} or self._val.startswith('float')
 
+  @cached_property
   def is_fixed(self) -> bool:
     for token in ('int', 'uint'):
       if self._val.startswith(token):
