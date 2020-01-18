@@ -163,6 +163,10 @@ class Node():
     return util.get_c_type(self.haoda_type)
 
   @property
+  def cl_type(self):
+    return util.get_cl_type(self.haoda_type)
+
+  @property
   def width_in_bits(self):
     return util.get_width_in_bits(self.haoda_type)
 
@@ -877,8 +881,16 @@ class DelayedRef(Node):
     return util.get_c_type(self.ptr_type)
 
   @property
+  def cl_ptr_type(self):
+    return util.get_cl_type(self.ptr_type)
+
+  @property
   def c_ptr_decl(self):
     return '{} {} = 0;'.format(self.c_ptr_type, self.ptr)
+
+  @property
+  def cl_ptr_decl(self):
+    return '{} {} = 0;'.format(self.cl_ptr_type, self.ptr)
 
   @property
   def c_buf_ref(self):
@@ -887,6 +899,10 @@ class DelayedRef(Node):
   @property
   def c_buf_decl(self):
     return '{} {}[{}];'.format(self.c_type, self.buf_name, self.delay)
+
+  @property
+  def cl_buf_decl(self):
+    return '{} {}[{}];'.format(self.cl_type, self.buf_name, self.delay)
 
   @property
   def c_buf_load(self):
@@ -900,6 +916,11 @@ class DelayedRef(Node):
   def c_next_ptr_expr(self):
     return '{ptr} < {depth} ? {c_ptr_type}({ptr}+1) : {c_ptr_type}(0)'.format(
         ptr=self.ptr, c_ptr_type=self.c_ptr_type, depth=self.delay - 1)
+
+  @property
+  def cl_next_ptr_expr(self):
+    return '{ptr} < {depth} ? ({ptr_type})({ptr}+1) : ({ptr_type})0'.format(
+        ptr=self.ptr, ptr_type=self.cl_ptr_type, depth=self.delay - 1)
 
 
 class FIFORef(Node):
