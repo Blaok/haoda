@@ -12,7 +12,7 @@ import zipfile
 from typing import (BinaryIO, Iterable, Iterator, Mapping, Optional, TextIO,
                     Tuple, Union)
 
-from haoda import util
+from haoda import ir, util
 
 _logger = logging.getLogger().getChild(__name__)
 
@@ -305,10 +305,10 @@ ARG_TEMPLATE = r'''
 '''
 
 
-def print_kernel_xml(top_name: str,
-                     axis_inputs: Iterable[Tuple[str, str, str, str]],
-                     axis_outputs: Iterable[Tuple[str, str, str, str]],
-                     kernel_xml: TextIO):
+def print_kernel_xml(top_name: str, axis_inputs: Iterable[Tuple[str, str,
+                                                                ir.Type, str]],
+                     axis_outputs: Iterable[Tuple[str, str, ir.Type,
+                                                  str]], kernel_xml: TextIO):
   """Generate kernel.xml file.
 
   Args:
@@ -325,7 +325,7 @@ def print_kernel_xml(top_name: str,
   for mode, axis_ports in (('read_only', axis_inputs), ('write_only',
                                                         axis_outputs)):
     for port_name, _, haoda_type, _ in axis_ports:
-      width = util.get_width_in_bits(haoda_type)
+      width = haoda_type.width_in_bits
       c_type = xml.sax.saxutils.escape('stream<ap_axiu<%d, 0, 0, 0>>&' % width)
       width += 8 + width // 8 * 2
       ports += AXIS_PORT_TEMPLATE.format(name=port_name, mode=mode,

@@ -2,11 +2,11 @@ import collections
 import copy
 import logging
 import math
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import cached_property
 
-from haoda import util
+from haoda import ir, util
 from haoda.ir import visitor
 
 __all__ = (
@@ -140,6 +140,7 @@ class Node():
     return self.SCALAR_ATTRS + self.LINEAR_ATTRS
 
   def __init__(self, **kwargs):
+    self._haoda_type = None
     for attr in self.SCALAR_ATTRS:
       setattr(self, attr, kwargs.pop(attr))
     for attr in self.LINEAR_ATTRS:
@@ -152,7 +153,7 @@ class Node():
   def __eq__(self, other):
     if (getattr(self, 'haoda_type', None) is not None and
         getattr(other, 'haoda_type', None) is not None and
-        not util.same_type(self.haoda_type, other.haoda_type)):
+        self.haoda_type != other.haoda_type):
       return False
     return all(
         hasattr(other, attr) and getattr(self, attr) == getattr(other, attr)
@@ -160,15 +161,36 @@ class Node():
 
   @property
   def c_type(self):
-    return util.get_c_type(self.haoda_type)
+    return self.haoda_type.c_type
 
   @property
   def cl_type(self):
-    return util.get_cl_type(self.haoda_type)
+    return self.haoda_type.cl_type
+
+  def _get_haoda_type(self) -> ir.Type:
+    """This method may be overridden by subclasses."""
+    return self._haoda_type
+
+  @property
+  def haoda_type(self) -> ir.Type:
+    return self._get_haoda_type()
+
+  @haoda_type.setter
+  def haoda_type(self, val: Union[None, str, ir.Type]) -> None:
+    if val is None:
+      self._haoda_type = None
+    elif isinstance(val, str):
+      self._haoda_type = ir.Type(val)
+    elif isinstance(val, ir.Type):
+      self._haoda_type = val
+    else:
+      raise ValueError(
+          'haoda_type must be set from an instance of NoneType, str, '
+          'or haoda.ir.Type, got %s' % type(val))
 
   @property
   def width_in_bits(self):
-    return util.get_width_in_bits(self.haoda_type)
+    return self.haoda_type.width_in_bits
 
   def visit(self, callback, args=None, pre_recursion=None, post_recursion=None):
     """A general-purpose, flexible, and powerful visitor.
@@ -241,15 +263,10 @@ class Let(Node):
       result = '{} {}'.format(self.haoda_type, result)
     return result
 
-  @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     if self._haoda_type is None:
       return self.expr.haoda_type
     return self._haoda_type
-
-  @haoda_type.setter
-  def haoda_type(self, val):
-    self._haoda_type = val
 
   @property
   def c_expr(self):
@@ -289,8 +306,7 @@ class BinaryOp(Node):
       return result
     return parenthesize(result)
 
-  @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     # TODO: derive from all operands
     return self.operand[0].haoda_type
 
@@ -338,8 +354,7 @@ class LtCmp(BinaryOp):
 
 class AddSub(BinaryOp):
   '''
-  @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     if getattr(self, '_haoda_type', None) is None:
 
       # leave type undetermined if any child has undetermined type (None)
@@ -351,7 +366,7 @@ class AddSub(BinaryOp):
       float_types = {
           opd.haoda_type
           for opd in self.operand
-          if util.is_float(opd.haoda_type)
+          if opd.haoda_type.is_float
       }
       if float_types:
         for float_type, width in util.TYPE_WIDTH.items():
@@ -363,7 +378,7 @@ class AddSub(BinaryOp):
 
       # TODO: implement rules for fixed point non-interger numbers
       for opd in self.operand:
-        if util.is_fixed(opd.haoda_type):
+        if opd.haoda_type.is_fixed:
           self._haoda_type = opd.haoda_type
           return self._haoda_type
 
@@ -379,17 +394,13 @@ class AddSub(BinaryOp):
           min_val -= get_max_val(opd)
       self._haoda_type = util.get_suitable_int_type(max_val, min_val)
     return self._haoda_type
-
-  @haoda_type.setter
-  def haoda_type(self, val):
-    self._haoda_type = val
   '''
 
 
 class MulDiv(BinaryOp):
   '''
   @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     if getattr(self, '_haoda_type', None) is None:
 
       # leave type undetermined if any child has undetermined type (None)
@@ -401,7 +412,7 @@ class MulDiv(BinaryOp):
       float_types = {
           opd.haoda_type
           for opd in self.operand
-          if util.is_float(opd.haoda_type)
+          if opd.haoda_type.is_float
       }
       if float_types:
         for float_type, width in util.TYPE_WIDTH.items():
@@ -413,7 +424,7 @@ class MulDiv(BinaryOp):
 
     # TODO: implement rules for fixed point non-interger numbers
       for opd in self.operand:
-        if util.is_fixed(opd.haoda_type):
+        if opd.haoda_type.is_fixed:
           self._haoda_type = opd.haoda_type
           return self._haoda_type
 
@@ -425,9 +436,6 @@ class MulDiv(BinaryOp):
       self._haoda_type = util.get_suitable_int_type(max_val, -max_val)
     return self._haoda_type
 
-  @haoda_type.setter
-  def haoda_type(self, val):
-    self._haoda_type = val
   '''
 
 
@@ -438,8 +446,7 @@ class Unary(Node):
   def __str__(self):
     return ''.join(self.operator) + str(self.operand)
 
-  @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     return self.operand.haoda_type
 
   @property
@@ -470,27 +477,26 @@ class Operand(Node):
     else:
       return parenthesize(self.expr.c_expr)
 
-  @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     for attr in self.ATTRS:
       val = getattr(self, attr)
       if val is not None:
         if hasattr(val, 'haoda_type'):
-          return val.haoda_type
+          return ir.Type(val.haoda_type)
         if attr == 'num':
           if 'u' in val.lower():
             if 'll' in val.lower():
-              return 'uint64'
-            return 'uint32'
+              return ir.Type('uint64')
+            return ir.Type('uint32')
           if 'll' in val.lower():
-            return 'int64'
+            return ir.Type('int64')
           if 'fl' in val.lower():
-            return 'double'
+            return ir.Type('double')
           if 'f' in val.lower() or 'e' in val.lower():
-            return 'float'
+            return ir.Type('float')
           if '.' in val:
-            return 'double'
-          return 'int32'
+            return ir.Type('double')
+          return ir.Type('int32')
         return None
     raise util.InternalError('undefined Operand')
 
@@ -514,8 +520,7 @@ class Call(Node):
   def __str__(self):
     return '{}({})'.format(self.name, ', '.join(map(str, self.arg)))
 
-  @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     if self.name in ('select',):
       if any(self.arg[idx].haoda_type is None for idx in (1, 2)):
         return None
@@ -539,8 +544,7 @@ class Call(Node):
 
       return variadic_to_binary([_.c_expr for _ in self.arg])
     if self.name == 'select':
-      common_type = util.common_type(self.arg[1].haoda_type,
-                                     self.arg[2].haoda_type)
+      common_type = self.arg[1].haoda_type.common_type(self.arg[2].haoda_type)
       args = list(self.arg)
       for idx in 1, 2:
         if args[idx].haoda_type != common_type:
@@ -608,8 +612,7 @@ class FIFO(Node):
   def edge(self):
     return self.write_module, self.read_module
 
-  @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     return self.write_module.exprs[self].haoda_type
 
   @property
@@ -842,8 +845,7 @@ class DelayedRef(Node):
   """
   SCALAR_ATTRS = ('delay', 'ref')
 
-  @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     return self.ref.haoda_type
 
   def __str__(self):
@@ -870,7 +872,7 @@ class DelayedRef(Node):
 
   @property
   def ptr_type(self):
-    return 'uint%d' % int(math.log2(self.delay) + 1)
+    return ir.Type('uint%d' % int(math.log2(self.delay) + 1))
 
   @property
   def c_expr(self):
@@ -878,11 +880,11 @@ class DelayedRef(Node):
 
   @property
   def c_ptr_type(self):
-    return util.get_c_type(self.ptr_type)
+    return self.ptr_type.c_type
 
   @property
   def cl_ptr_type(self):
-    return util.get_cl_type(self.ptr_type)
+    return self.ptr_type.cl_type
 
   @property
   def c_ptr_decl(self):
@@ -955,14 +957,13 @@ class FIFORef(Node):
 
   def __eq__(self, other):
     if (self.haoda_type is not None and other.haoda_type is not None and
-        not util.same_type(self.haoda_type, other.haoda_type)):
+        self.haoda_type != other.haoda_type):
       return False
     return all(
         getattr(self, attr) == getattr(other, attr)
         for attr in ('lat', 'ref_id'))
 
-  @property
-  def haoda_type(self):
+  def _get_haoda_type(self):
     return self.fifo.haoda_type
 
   @property
@@ -1001,7 +1002,7 @@ class DRAMRef(Node):
 
   def __eq__(self, other):
     if (self.haoda_type is not None and other.haoda_type is not None and
-        not util.same_type(self.haoda_type, other.haoda_type)):
+        self.haoda_type != other.haoda_type):
       return False
     return all(
         getattr(self, attr) == getattr(other, attr)
@@ -1170,13 +1171,13 @@ def get_max_val(node) -> int:
   if is_const(node):
     return int(node.num)
   haoda_type = node.haoda_type
-  if util.is_float(haoda_type):
+  if haoda_type.is_float:
     raise TypeError('haoda_type has to be an integer type, got %s' % haoda_type)
-  if util.is_fixed(haoda_type):
+  if haoda_type.is_fixed:
     raise NotImplementedError
   if haoda_type.startswith('uint'):
-    return 2**util.get_width_in_bits(haoda_type) - 1
-  return 2**(util.get_width_in_bits(haoda_type) - 1) - 1
+    return 2**haoda_type.width_in_bits - 1
+  return 2**(haoda_type.width_in_bits - 1) - 1
 
 
 def get_min_val(node) -> int:
@@ -1184,13 +1185,13 @@ def get_min_val(node) -> int:
   if is_const(node):
     return int(node.num)
   haoda_type = node.haoda_type
-  if util.is_float(haoda_type):
+  if haoda_type.is_float:
     raise TypeError('haoda_type has to be an integer type, got %s' % haoda_type)
-  if util.is_fixed(haoda_type):
+  if haoda_type.is_fixed:
     raise NotImplementedError
   if haoda_type.startswith('uint'):
     return 0
-  return -2**(util.get_width_in_bits(haoda_type) - 1)
+  return -2**(haoda_type.width_in_bits - 1)
 
 
 REDUCTION_OPS = {'+': AddSub, '*': MulDiv}
