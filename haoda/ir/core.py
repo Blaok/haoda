@@ -2,7 +2,7 @@ import collections
 import copy
 import logging
 import math
-from typing import List, Optional, Tuple, Union, Sequence
+from typing import List, Optional, Sequence, Tuple, Union
 
 import cached_property
 
@@ -167,6 +167,13 @@ class Node:
   def cl_type(self) -> str:
     return self.haoda_type.cl_type
 
+  def __getattr__(self, name: str):
+    if name == 'cl_expr':
+      if getattr(self, '_get_cl_expr', None) is not None:
+        return self._get_cl_expr()
+      return getattr(self, 'c_expr')
+    raise AttributeError
+
   def _get_haoda_type(self) -> ir.Type:
     """This method may be overridden by subclasses."""
     return self._haoda_type
@@ -258,7 +265,7 @@ class Let(Node):
   SCALAR_ATTRS = 'haoda_type', 'name', 'expr'
 
   name: str
-  expr: 'Expr'
+  expr: Node
 
   def __str__(self):
     result = '{} = {}'.format(self.name, unparenthesize(self.expr))
@@ -305,7 +312,7 @@ class Ref(Node):
 class BinaryOp(Node):
   LINEAR_ATTRS = 'operand', 'operator'
 
-  operand: Sequence['Expr']
+  operand: Sequence[Node]
   operator: Sequence[str]
 
   def __str__(self):
@@ -529,8 +536,7 @@ class Cast(Node):
 
   @property
   def c_expr(self):
-    return 'static_cast<{} >{}'.format(self.c_type,
-                                       parenthesize(self.expr.c_expr))
+    return '({}){}'.format(self.c_type, parenthesize(self.expr.c_expr))
 
 
 class Call(Node):
@@ -538,7 +544,7 @@ class Call(Node):
   LINEAR_ATTRS = ('arg',)
 
   name: str
-  arg: Sequence[Expr]
+  arg: Sequence[Node]
 
   def __str__(self):
     return '{}({})'.format(self.name, ', '.join(map(str, self.arg)))
@@ -574,6 +580,36 @@ class Call(Node):
           args[idx] = Cast(haoda_type=common_type, expr=args[idx])
       return '({0.c_expr} ? {1.c_expr} : {2.c_expr})'.format(*args)
     return '{}({})'.format(self.name, ', '.join(_.c_expr for _ in self.arg))
+
+  def _get_cl_expr(self) -> str:
+    if self.name in {'min', 'max'}:
+      assert len(self.arg) >= 2, 'too few arguments to %s' % self.name
+      fmt_str = '{}({}, {})'
+
+      def variadic_to_binary(args: Sequence[Node]) -> Tuple[str, bool]:
+        nargs = len(args)
+        func_name = self.name
+        if nargs == 1:
+          return args[0].cl_expr, args[0].haoda_type.is_float
+        if nargs == 2:
+          is_float = any(x.haoda_type.is_float for x in args)
+          if is_float:
+            func_name = f'f{func_name}'
+          return fmt_str.format(func_name, *(x.cl_expr for x in args)), is_float
+        arg1, is_float1 = variadic_to_binary(args[:nargs // 2])
+        arg2, is_float2 = variadic_to_binary(args[nargs // 2:])
+        return fmt_str.format(func_name, arg1, arg2), is_float1 or is_float2
+
+      return variadic_to_binary(self.arg)[0]
+
+    if self.name == 'select':
+      common_type = self.arg[1].haoda_type.common_type(self.arg[2].haoda_type)
+      args = list(self.arg)
+      for idx in 1, 2:
+        if args[idx].haoda_type != common_type:
+          args[idx] = Cast(haoda_type=common_type, expr=args[idx])
+      return '({0.cl_expr} ? {1.cl_expr} : {2.cl_expr})'.format(*args)
+    return '{}({})'.format(self.name, ', '.join(_.cl_expr for _ in self.arg))
 
 
 class Var(Node):
