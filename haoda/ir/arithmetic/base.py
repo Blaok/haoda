@@ -95,7 +95,8 @@ def flatten(node: ir.Node) -> ir.Node:
         return flatten(node.operand[0])
 
       # Flatten BinaryOp with reduction operators
-      new_operator, new_operand = [], []
+      new_operator: List[str] = []
+      new_operand: List[ir.Expr] = []
       for child_operator, child_operand in zip((None, *node.operator),
                                                node.operand):
         if child_operator is not None:
@@ -138,7 +139,7 @@ def flatten(node: ir.Node) -> ir.Node:
     if isinstance(node, ir.Call):
       operator = getattr(node, 'name')
       if operator in ir.REDUCTION_FUNCS:
-        operands = []
+        operands: List[ir.Expr] = []
         for operand in getattr(node, 'arg'):
           if (isinstance(operand, ir.Call) and
               getattr(operand, 'name') == operator):
@@ -213,7 +214,7 @@ def reverse_distribute(node: NodeT) -> NodeT:
         new_node = ir.AddSub(operator=tuple(new_operators[1:]),
                              operand=tuple(new_operands))
         if new_node != node:
-          return new_node
+          return new_node  # type: ignore
       elif new_operands and new_operands[0] != node:
         return new_operands[0]
     return node

@@ -2,7 +2,7 @@ import collections
 import copy
 import logging
 import math
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Sequence
 
 import cached_property
 
@@ -129,14 +129,14 @@ Var: name=ID ('[' idx=Int ']')*;
 ''' + FUNC_NAME
 
 
-class Node():
+class Node:
   """A immutable, hashable IR node.
   """
-  SCALAR_ATTRS = ()  # type: Tuple[str, ...]
-  LINEAR_ATTRS = ()  # type: Tuple[str, ...]
+  SCALAR_ATTRS: Tuple[str, ...] = ()
+  LINEAR_ATTRS: Tuple[str, ...] = ()
 
   @property
-  def ATTRS(self):
+  def ATTRS(self) -> Tuple[str, ...]:
     return self.SCALAR_ATTRS + self.LINEAR_ATTRS
 
   def __init__(self, **kwargs):
@@ -146,11 +146,11 @@ class Node():
     for attr in self.LINEAR_ATTRS:
       setattr(self, attr, tuple(kwargs.pop(attr)))
 
-  def __hash__(self):
+  def __hash__(self) -> int:
     return hash((tuple(getattr(self, _) for _ in self.SCALAR_ATTRS),
                  tuple(tuple(getattr(self, _)) for _ in self.LINEAR_ATTRS)))
 
-  def __eq__(self, other):
+  def __eq__(self, other) -> bool:
     if (getattr(self, 'haoda_type', None) is not None and
         getattr(other, 'haoda_type', None) is not None and
         self.haoda_type != other.haoda_type):
@@ -160,11 +160,11 @@ class Node():
         for attr in self.ATTRS)
 
   @property
-  def c_type(self):
+  def c_type(self) -> str:
     return self.haoda_type.c_type
 
   @property
-  def cl_type(self):
+  def cl_type(self) -> str:
     return self.haoda_type.cl_type
 
   def _get_haoda_type(self) -> ir.Type:
@@ -189,7 +189,7 @@ class Node():
           'or haoda.ir.Type, got %s' % type(val))
 
   @property
-  def width_in_bits(self):
+  def width_in_bits(self) -> int:
     return self.haoda_type.width_in_bits
 
   def visit(self, callback, args=None, pre_recursion=None, post_recursion=None):
@@ -257,6 +257,9 @@ class Node():
 class Let(Node):
   SCALAR_ATTRS = 'haoda_type', 'name', 'expr'
 
+  name: str
+  expr: 'Expr'
+
   def __str__(self):
     result = '{} = {}'.format(self.name, unparenthesize(self.expr))
     if self.haoda_type is not None:
@@ -278,6 +281,10 @@ class Ref(Node):
   SCALAR_ATTRS = 'name', 'lat'
   LINEAR_ATTRS = ('idx',)
 
+  name: str
+  idx: Sequence[int]
+  lat: Optional[int]
+
   def __init__(self, **kwargs):
     super().__init__(**kwargs)
     self.idx = tuple(self.idx)
@@ -297,6 +304,9 @@ class Ref(Node):
 
 class BinaryOp(Node):
   LINEAR_ATTRS = 'operand', 'operator'
+
+  operand: Sequence['Expr']
+  operator: Sequence[str]
 
   def __str__(self):
     result = str(self.operand[0])
@@ -443,6 +453,9 @@ class Unary(Node):
   SCALAR_ATTRS = ('operand',)
   LINEAR_ATTRS = ('operator',)
 
+  operand: 'Operand'
+  operator: Sequence[str]
+
   def __str__(self):
     return ''.join(self.operator) + str(self.operand)
 
@@ -456,6 +469,13 @@ class Unary(Node):
 
 class Operand(Node):
   SCALAR_ATTRS = 'cast', 'call', 'ref', 'num', 'var', 'expr'
+
+  cast: Optional['Cast']
+  call: Optional['Call']
+  ref: Optional[Ref]
+  num: Optional[str]
+  var: Optional['Var']
+  expr: Optional['Expr']
 
   def __str__(self):
     for attr in ('cast', 'call', 'ref', 'num', 'var'):
@@ -517,6 +537,9 @@ class Call(Node):
   SCALAR_ATTRS = ('name',)
   LINEAR_ATTRS = ('arg',)
 
+  name: str
+  arg: Sequence[Expr]
+
   def __str__(self):
     return '{}({})'.format(self.name, ', '.join(map(str, self.arg)))
 
@@ -556,6 +579,9 @@ class Call(Node):
 class Var(Node):
   SCALAR_ATTRS = ('name',)
   LINEAR_ATTRS = ('idx',)
+
+  name: str
+  idx: Sequence[int]
 
   def __str__(self):
     return self.name + ''.join(map('[{}]'.format, self.idx))
