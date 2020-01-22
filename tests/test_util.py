@@ -1,21 +1,32 @@
 import unittest
 
 from haoda import util
+from haoda.ir.type import Type
 
 
 class TestUtil(unittest.TestCase):
 
   def test_c_type(self):
-    self.assertEqual(util.get_c_type('uint2'), 'ap_uint<2>')
-    self.assertEqual(util.get_c_type('int4'), 'ap_int<4>')
-    self.assertEqual(util.get_c_type('uint8'), 'uint8_t')
-    self.assertEqual(util.get_c_type('int16'), 'int16_t')
-    self.assertEqual(util.get_c_type('uint32_16'), 'ap_ufixed<32, 16>')
-    self.assertEqual(util.get_c_type('int64_32'), 'ap_fixed<64, 32>')
-    self.assertEqual(util.get_c_type('float'), 'float')
-    self.assertEqual(util.get_c_type('float32'), 'float')
-    self.assertEqual(util.get_c_type('float64'), 'double')
-    self.assertEqual(util.get_c_type('double'), 'double')
+    obj = Type('uint2')
+    self.assertEqual(obj.c_type, 'ap_uint<2>')
+    obj = Type('int4')
+    self.assertEqual(obj.c_type, 'ap_int<4>')
+    obj = Type('uint8')
+    self.assertEqual(obj.c_type, 'uint8_t')
+    obj = Type('int16')
+    self.assertEqual(obj.c_type, 'int16_t')
+    obj = Type('uint32_16')
+    self.assertEqual(obj.c_type, 'ap_ufixed<32, 16>')
+    obj = Type('int64_32')
+    self.assertEqual(obj.c_type, 'ap_fixed<64, 32>')
+    obj = Type('float')
+    self.assertEqual(obj.c_type, 'float')
+    obj = Type('float32')
+    self.assertEqual(obj.c_type, 'float')
+    obj = Type('float64')
+    self.assertEqual(obj.c_type, 'double')
+    obj = Type('double')
+    self.assertEqual(obj.c_type, 'double')
 
   def test_type_propagation(self):
     self.assertEqual(util.get_suitable_int_type(15), 'uint4')

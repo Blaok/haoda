@@ -2,8 +2,8 @@ import collections
 import functools
 import logging
 from collections import OrderedDict
-from typing import (Callable, Dict, Iterable, List, Mapping, Optional, Tuple,
-                    TypeVar, overload)
+from typing import (Callable, Dict, Iterable, List, Mapping, Tuple, TypeVar,
+                    overload)
 
 from haoda import ir, util
 
@@ -53,7 +53,7 @@ def simplify(expr, logger=None):
   return passes(expr)
 
 
-def compose(*funcs: Iterable[Callable[[T], T]]) -> Callable[[T], T]:
+def compose(*funcs: Callable[[T], T]) -> Callable[[T], T]:
   """Composes functions. The first function in funcs are invoked the first.
   """
   return functools.reduce(lambda g, f: lambda x: f(g(x)), funcs, lambda x: x)
@@ -252,6 +252,7 @@ def print_tree(node: NodeT,
     """
     printer('%s+-%s(%s): %s' %
             (' ' * args[0], type(node).__name__, node.haoda_type, node))
+    return node
 
   if not isinstance(node, ir.Node):
     return node
@@ -263,9 +264,9 @@ def print_tree(node: NodeT,
                     post_recursion=post_recursion)
 
 
-def propagate_type(node: ir.Node, symbol_table: Mapping[str, str]):
+def propagate_type(node: ir.Node, symbol_table: Mapping[str, ir.Type]):
 
-  def visitor(node: ir.Node, symbol_table: Mapping[str, str]):
+  def visitor(node: ir.Node, symbol_table: Mapping[str, ir.Type]):
     if node.haoda_type is None:
       if isinstance(node, (ir.Ref, ir.Var)):
         node.haoda_type = symbol_table[node.name]
