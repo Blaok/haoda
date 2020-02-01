@@ -254,8 +254,14 @@ def get_device_info(platform_path: str):
     ValueError: If cannot parse the platform properly.
   """
   device_name = os.path.basename(platform_path)
-  with zipfile.ZipFile(os.path.join(platform_path, 'hw',
-                                    device_name + '.dsa')) as platform:
+  try:
+    platform_file = next(
+        filter(os.path.isfile,
+               (os.path.join(platform_path, 'hw', f'{device_name}.{ext}')
+                for ext in ('xsa', 'dsa'))))
+  except StopIteration as e:
+    raise ValueError('cannot find platform file for %s' % device_name) from e
+  with zipfile.ZipFile(platform_file) as platform:
     with platform.open(device_name + '.hpfm') as metadata:
       platform_info = ET.parse(metadata).find('./xd:component/xd:platformInfo',
                                               XILINX_XML_NS)
