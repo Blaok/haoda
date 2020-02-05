@@ -128,6 +128,7 @@ Var: name=ID ('[' idx=Int ']')*;
 
 ''' + FUNC_NAME
 
+# pylint: disable=protected-access
 
 class Node:
   """A immutable, hashable IR node.
@@ -167,13 +168,6 @@ class Node:
   def cl_type(self) -> str:
     return self.haoda_type.cl_type
 
-  def __getattr__(self, name: str):
-    if name == 'cl_expr':
-      if getattr(self, '_get_cl_expr', None) is not None:
-        return self._get_cl_expr()
-      return getattr(self, 'c_expr')
-    raise AttributeError
-
   def _get_haoda_type(self) -> ir.Type:
     """This method may be overridden by subclasses."""
     return self._haoda_type
@@ -198,6 +192,24 @@ class Node:
   @property
   def width_in_bits(self) -> int:
     return self.haoda_type.width_in_bits
+
+  @property
+  def c_expr(self) -> str:
+    return self._get_expr('c')
+
+  @property
+  def cl_expr(self) -> str:
+    return self._get_expr('cl')
+
+  def _get_expr(self, lang: str) -> str:
+    raise NotImplementedError
+
+  def _get_type_expr(self, lang: str) -> str:
+    if lang == 'c':
+      return self.c_type
+    if lang == 'cl':
+      return self.cl_type
+    raise ValueError(f'lang must be "c" or "cl", got "{lang}"')
 
   def visit(self, callback, args=None, pre_recursion=None, post_recursion=None):
     """A general-purpose, flexible, and powerful visitor.
@@ -278,10 +290,9 @@ class Let(Node):
       return self.expr.haoda_type
     return self._haoda_type
 
-  @property
-  def c_expr(self):
-    return 'const {} {} = {};'.format(self.c_type, self.name,
-                                      unparenthesize(self.expr.c_expr))
+  def _get_expr(self, lang: str):
+    return 'const {} {} = {};'.format(self._get_type_expr(lang), self.name,
+                                      unparenthesize(self.expr._get_expr(lang)))
 
 
 class Ref(Node):
@@ -327,11 +338,10 @@ class BinaryOp(Node):
     # TODO: derive from all operands
     return self.operand[0].haoda_type
 
-  @property
-  def c_expr(self):
-    result = self.operand[0].c_expr
+  def _get_expr(self, lang: str) -> str:
+    result = self.operand[0]._get_expr(lang)
     for operator, operand in zip(self.operator, self.operand[1:]):
-      result += ' {} {}'.format(operator, operand.c_expr)
+      result += ' {} {}'.format(operator, operand._get_expr(lang))
     if self.singleton:
       return result
     return parenthesize(result)
@@ -469,9 +479,8 @@ class Unary(Node):
   def _get_haoda_type(self):
     return self.operand.haoda_type
 
-  @property
-  def c_expr(self):
-    return ''.join(self.operator) + self.operand.c_expr
+  def _get_expr(self, lang: str) -> str:
+    return ''.join(self.operator) + self.operand._get_expr(lang)
 
 
 class Operand(Node):
@@ -492,17 +501,17 @@ class Operand(Node):
     else:
       return parenthesize(self.expr)
 
-  @property
-  def c_expr(self):
-    for attr in ('cast', 'call', 'ref', 'num', 'var'):
-      attr = getattr(self, attr)
+  def _get_expr(self, lang: str) -> str:
+    for attr_name in ('cast', 'call', 'ref', 'num', 'var'):
+      attr = getattr(self, attr_name)
       if attr is not None:
-        if hasattr(attr, 'c_expr'):
-          return attr.c_expr
+        if hasattr(attr, '_get_expr'):
+          return attr._get_expr(lang)
         return str(attr)
     # pylint: disable=useless-else-on-loop
     else:
-      return parenthesize(self.expr.c_expr)
+      assert self.expr is not None
+      return parenthesize(self.expr._get_expr(lang))
 
   def _get_haoda_type(self):
     for attr in self.ATTRS:
@@ -531,12 +540,14 @@ class Operand(Node):
 class Cast(Node):
   SCALAR_ATTRS = 'haoda_type', 'expr'
 
+  expr: Node
+
   def __str__(self):
     return '{}{}'.format(self.haoda_type, parenthesize(self.expr))
 
-  @property
-  def c_expr(self):
-    return '({}){}'.format(self.c_type, parenthesize(self.expr.c_expr))
+  def _get_expr(self, lang: str) -> str:
+    return '({}){}'.format(self._get_type_expr(lang),
+                           parenthesize(self.expr._get_expr(lang)))
 
 
 class Call(Node):
@@ -556,51 +567,44 @@ class Call(Node):
       return util.common_type(self.arg[1].haoda_type, self.arg[2].haoda_type)
     return self.arg[0].haoda_type
 
-  @property
-  def c_expr(self):
+  def _get_expr(self, lang: str) -> str:
     if self.name in {'min', 'max'}:
       assert len(self.arg) >= 2, 'too few arguments to %s' % self.name
-      fmt_str = 'std::{}({}, {})'
 
-      def variadic_to_binary(args: List[str]) -> str:
-        nargs = len(args)
-        if nargs == 1:
-          return args[0]
-        if nargs == 2:
-          return fmt_str.format(self.name, *args)
-        return fmt_str.format(self.name, variadic_to_binary(args[:nargs // 2]),
-                              variadic_to_binary(args[nargs // 2:]))
+      if lang == 'c':
+        fmt_str = 'std::{}({}, {})'
 
-      return variadic_to_binary([_.c_expr for _ in self.arg])
-    if self.name == 'select':
-      common_type = self.arg[1].haoda_type.common_type(self.arg[2].haoda_type)
-      args = list(self.arg)
-      for idx in 1, 2:
-        if args[idx].haoda_type != common_type:
-          args[idx] = Cast(haoda_type=common_type, expr=args[idx])
-      return '({0.c_expr} ? {1.c_expr} : {2.c_expr})'.format(*args)
-    return '{}({})'.format(self.name, ', '.join(_.c_expr for _ in self.arg))
+        def variadic_to_binary_c(args: List[str]) -> str:
+          nargs = len(args)
+          if nargs == 1:
+            return args[0]
+          if nargs == 2:
+            return fmt_str.format(self.name, *args)
+          return fmt_str.format(self.name,
+                                variadic_to_binary_c(args[:nargs // 2]),
+                                variadic_to_binary_c(args[nargs // 2:]))
 
-  def _get_cl_expr(self) -> str:
-    if self.name in {'min', 'max'}:
-      assert len(self.arg) >= 2, 'too few arguments to %s' % self.name
-      fmt_str = '{}({}, {})'
+        return variadic_to_binary_c([_.c_expr for _ in self.arg])
 
-      def variadic_to_binary(args: Sequence[Node]) -> Tuple[str, bool]:
-        nargs = len(args)
-        func_name = self.name
-        if nargs == 1:
-          return args[0].cl_expr, args[0].haoda_type.is_float
-        if nargs == 2:
-          is_float = any(x.haoda_type.is_float for x in args)
-          if is_float:
-            func_name = f'f{func_name}'
-          return fmt_str.format(func_name, *(x.cl_expr for x in args)), is_float
-        arg1, is_float1 = variadic_to_binary(args[:nargs // 2])
-        arg2, is_float2 = variadic_to_binary(args[nargs // 2:])
-        return fmt_str.format(func_name, arg1, arg2), is_float1 or is_float2
+      if lang == 'cl':
+        fmt_str = '{}({}, {})'
 
-      return variadic_to_binary(self.arg)[0]
+        def variadic_to_binary_cl(args: Sequence[Node]) -> Tuple[str, bool]:
+          nargs = len(args)
+          func_name = self.name
+          if nargs == 1:
+            return args[0].cl_expr, args[0].haoda_type.is_float
+          if nargs == 2:
+            is_float = any(x.haoda_type.is_float for x in args)
+            if is_float:
+              func_name = f'f{func_name}'
+            return fmt_str.format(func_name,
+                                  *(x.cl_expr for x in args)), is_float
+          arg1, is_float1 = variadic_to_binary_cl(args[:nargs // 2])
+          arg2, is_float2 = variadic_to_binary_cl(args[nargs // 2:])
+          return fmt_str.format(func_name, arg1, arg2), is_float1 or is_float2
+
+        return variadic_to_binary_cl(self.arg)[0]
 
     if self.name == 'select':
       common_type = self.arg[1].haoda_type.common_type(self.arg[2].haoda_type)
@@ -608,8 +612,9 @@ class Call(Node):
       for idx in 1, 2:
         if args[idx].haoda_type != common_type:
           args[idx] = Cast(haoda_type=common_type, expr=args[idx])
-      return '({0.cl_expr} ? {1.cl_expr} : {2.cl_expr})'.format(*args)
-    return '{}({})'.format(self.name, ', '.join(_.cl_expr for _ in self.arg))
+      return '({} ? {} : {})'.format(*(x._get_expr(lang) for x in args))
+    return '{}({})'.format(self.name,
+                           ', '.join(x._get_expr(lang) for x in self.arg))
 
 
 class Var(Node):
@@ -622,8 +627,7 @@ class Var(Node):
   def __str__(self):
     return self.name + ''.join(map('[{}]'.format, self.idx))
 
-  @property
-  def c_expr(self):
+  def _get_expr(self, lang: str) -> str:
     return self.name + ''.join(map('[{}]'.format, self.idx))
 
 
@@ -643,6 +647,12 @@ class FIFO(Node):
   """
   IMMUTABLE_ATTRS = 'read_module', 'write_module'
   SCALAR_ATTRS = 'read_module', 'read_lat', 'write_module', 'write_lat', 'depth'
+
+  read_module: 'Module'
+  read_lat: Optional[int]
+  write_module: 'Module'
+  write_lat: Optional[int]
+  depth: Optional[int]
 
   def __init__(self,
                write_module,
@@ -677,8 +687,7 @@ class FIFO(Node):
   def _get_haoda_type(self):
     return self.write_module.exprs[self].haoda_type
 
-  @property
-  def c_expr(self):
+  def _get_expr(self, tag: str):
     return 'from_{}_to_{}'.format(self.write_module.name, self.read_module.name)
 
 
@@ -907,6 +916,9 @@ class DelayedRef(Node):
   """
   SCALAR_ATTRS = ('delay', 'ref')
 
+  delay: int
+  ref: Ref
+
   def _get_haoda_type(self):
     return self.ref.haoda_type
 
@@ -936,9 +948,8 @@ class DelayedRef(Node):
   def ptr_type(self):
     return ir.Type('uint%d' % int(math.log2(self.delay) + 1))
 
-  @property
-  def c_expr(self):
-    return '{ref.c_expr}_delayed_{delay}'.format(**self.__dict__)
+  def _get_expr(self, lang: str) -> str:
+    return '{}_delayed_{}'.format(self.ref._get_expr(lang), self.delay)
 
   @property
   def c_ptr_type(self):
@@ -995,9 +1006,6 @@ class FIFORef(Node):
     lat: int, at what cycle of a pipelined loop it is being referenced.
     ref_id: int, reference id in the current scope
   Properties:
-    c_type: str
-    c_expr: str
-    haoda_type: str
     ld_name: str
     st_name: str
     ref_name: str
@@ -1036,8 +1044,7 @@ class FIFORef(Node):
   def ref_name(self):
     return '{}{}'.format(type(self).REF_PREFIX, self.ref_id)
 
-  @property
-  def c_expr(self):
+  def _get_expr(self, lang: str) -> str:
     return self.ref_name
 
 
@@ -1070,8 +1077,7 @@ class DRAMRef(Node):
         getattr(self, attr) == getattr(other, attr)
         for attr in ('dram', 'offset'))
 
-  @property
-  def c_expr(self):
+  def _get_expr(self, lang: str) -> str:
     return str(self)
 
   def dram_buf_name(self, bank):
