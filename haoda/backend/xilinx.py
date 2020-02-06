@@ -12,7 +12,8 @@ import zipfile
 from typing import (BinaryIO, Iterable, Iterator, Mapping, Optional, TextIO,
                     Tuple, Union)
 
-from haoda import ir, util
+from haoda import util
+from haoda.backend.common import Cat, Arg
 
 _logger = logging.getLogger().getChild(__name__)
 
@@ -81,7 +82,7 @@ foreach tcl_file [glob -nocomplain {hdl_dir}/*.tcl] {{
 set_property top {top_name} [current_fileset]
 update_compile_order -fileset sources_1
 update_compile_order -fileset sim_1
-ipx::package_project -root_dir ${{tmp_ip_dir}} -vendor xilinx.com -library RTLKernel -taxonomy /KernelIP -import_files -set_current false
+ipx::package_project -root_dir ${{tmp_ip_dir}} -vendor haoda -library xrtl -taxonomy /KernelIP -import_files -set_current false
 ipx::unload_core ${{tmp_ip_dir}}/component.xml
 ipx::edit_ip_in_project -upgrade true -name tmp_edit_project -directory ${{tmp_ip_dir}} ${{tmp_ip_dir}}/component.xml
 set_property core_revision 2 [ipx::current_core]
@@ -106,6 +107,9 @@ BUS_IFACE = r'''
 ipx::associate_bus_interfaces -busif {} -clock ap_clk [ipx::current_core]
 '''
 
+S_AXI_NAME = 's_axi_control'
+M_AXI_PREFIX = 'm_axi_'
+
 
 class PackageXo(Vivado):
   """Packages the given files into a Xilinx hardware object.
@@ -119,7 +123,7 @@ class PackageXo(Vivado):
     kernel_xml: Name of a xml file containing description of the kernel.
     hdl_dir: Directory name containing all HDL files.
     m_axi_names: Variable names connected to the m_axi bus.
-    iface_names: Other interface names, default to ('s_axi_control').
+    iface_names: Other interface names, default to (S_AXI_NAME,).
     cpp_kernels: File names of C++ kernels.
   """
 
@@ -129,7 +133,7 @@ class PackageXo(Vivado):
                kernel_xml: str,
                hdl_dir: str,
                m_axi_names: Iterable[str] = (),
-               iface_names: Iterable[str] = ('s_axi_control',),
+               iface_names: Iterable[str] = (S_AXI_NAME,),
                cpp_kernels=()):
     self.tmpdir = tempfile.TemporaryDirectory(prefix='package-xo-')
     if _logger.isEnabledFor(logging.INFO):
@@ -137,7 +141,7 @@ class PackageXo(Vivado):
         for filename in files:
           _logger.info('packing: %s', filename)
     iface_names = list(iface_names)
-    iface_names.extend(map('m_axi_{}'.format, m_axi_names))
+    iface_names.extend(M_AXI_PREFIX + x for x in m_axi_names)
     kwargs = {
         'top_name': top_name,
         'kernel_xml': kernel_xml,
@@ -285,7 +289,7 @@ def get_device_info(platform_path: str):
 KERNEL_XML_TEMPLATE = r'''
 <?xml version="1.0" encoding="UTF-8"?>
 <root versionMajor="1" versionMinor="6">
-  <kernel name="{top_name}" language="ip_c" vlnv="xilinx.com:RTLKernel:{top_name}:1.0" attributes="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" interrupt="true">
+  <kernel name="{name}" language="ip_c" vlnv="haoda:xrtl:{name}:1.0" attributes="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" interrupt="true" hwControlProtocol="ap_ctrl_hs">
     <ports>{ports}
     </ports>
     <args>{args}
@@ -294,59 +298,70 @@ KERNEL_XML_TEMPLATE = r'''
 </root>
 '''
 
-S_AXI_PORT = r'''
-      <port name="s_axi_control" mode="slave" range="0x1000" dataWidth="32" portType="addressable" base="0x0"/>
+S_AXI_PORT = f'''
+      <port name="{S_AXI_NAME}" mode="slave" range="0x1000" dataWidth="32" portType="addressable" base="0x0"/>
 '''
 
-M_AXI_PORT_TEMPLATE = r'''
-      <port name="m_axi_{name}" mode="master" range="0xFFFFFFFF" dataWidth="{width}" portType="addressable" base="0x0"/>
+M_AXI_PORT_TEMPLATE = f'''
+      <port name="{M_AXI_PREFIX}{{name}}" mode="master" range="0xFFFFFFFFFFFFFFFF" dataWidth="{{width}}" portType="addressable" base="0x0"/>
 '''
 
-AXIS_PORT_TEMPLATE = r'''
+AXIS_PORT_TEMPLATE = '''
       <port name="{name}" mode="{mode}" dataWidth="{width}" portType="stream"/>
 '''
 
-ARG_TEMPLATE = r'''
+ARG_TEMPLATE = '''
       <arg name="{name}" addressQualifier="{addr_qualifier}" id="{arg_id}" port="{port_name}" size="{size:#x}" offset="{offset:#x}" hostOffset="0x0" hostSize="{host_size:#x}" type="{c_type}"/>
 '''
 
 
-def print_kernel_xml(top_name: str, axis_inputs: Iterable[Tuple[str, str,
-                                                                ir.Type, str]],
-                     axis_outputs: Iterable[Tuple[str, str, ir.Type,
-                                                  str]], kernel_xml: TextIO):
+def print_kernel_xml(name: str, args: Iterable[Arg], kernel_xml: TextIO):
   """Generate kernel.xml file.
 
   Args:
-    top_name: Name of the top-level kernel function.
-    axis_inputs: Sequence of (port_name, _, haoda_type, _) of input axis ports
-    axis_outputs: Sequence of (port_name, _, haoda_type, _) of output axis ports
+    top_name: Name of the kernel.
+    args: Iterable of Arg.
     kernel_xml: File object to write to.
   """
-  ports = ''
-  args = ''
-  offset = 0
-  arg_id = 0
-  size = host_size = 8
-  for mode, axis_ports in (('read_only', axis_inputs), ('write_only',
-                                                        axis_outputs)):
-    for port_name, _, haoda_type, _ in axis_ports:
-      width = haoda_type.width_in_bits
-      c_type = xml.sax.saxutils.escape('stream<ap_axiu<%d, 0, 0, 0>>&' % width)
-      width += 8 + width // 8 * 2
-      ports += AXIS_PORT_TEMPLATE.format(name=port_name, mode=mode,
-                                         width=width).rstrip('\n')
-      args += ARG_TEMPLATE.format(name=port_name,
-                                  addr_qualifier=4,
-                                  arg_id=arg_id,
-                                  port_name=port_name,
-                                  c_type=c_type,
-                                  size=size,
-                                  offset=offset,
-                                  host_size=host_size).rstrip('\n')
-    arg_id += 1
+  kernel_ports = S_AXI_PORT
+  kernel_args = ''
+  offset = 0x10
+  for arg_id, arg in enumerate(args):
+    if arg.cat == Cat.SCALAR:
+      addr_qualifier = 0  # scalar
+      host_size = arg.width // 8
+      size = max(4, host_size)
+      port_name = S_AXI_NAME
+    elif arg.cat == Cat.MMAP:
+      addr_qualifier = 1  # mmap
+      size = host_size = 8  # 64-bit
+      port_name = M_AXI_PREFIX + arg.name
+      kernel_ports += M_AXI_PORT_TEMPLATE.format(name=arg.name,
+                                                 width=arg.width).rstrip('\n')
+    elif arg.cat in {Cat.ISTREAM, Cat.OSTREAM}:
+      addr_qualifier = 4  # stream
+      size = host_size = 8  # 64-bit
+      port_name = arg.name
+      mode = 'read_only' if arg.cat == Cat.ISTREAM else 'write_only'
+      kernel_ports += AXIS_PORT_TEMPLATE.format(name=arg.name,
+                                                mode=mode,
+                                                width=arg.width)
+    else:
+      raise NotImplementedError(f'unknown arg category: {arg.cat}')
+    kernel_args += ARG_TEMPLATE.format(name=arg.name,
+                                       addr_qualifier=addr_qualifier,
+                                       arg_id=arg_id,
+                                       port_name=port_name,
+                                       c_type=xml.sax.saxutils.escape(
+                                           arg.ctype),
+                                       size=size,
+                                       offset=offset,
+                                       host_size=host_size).rstrip('\n')
+    offset += size + 4
   kernel_xml.write(
-      KERNEL_XML_TEMPLATE.format(top_name=top_name, ports=ports, args=args))
+      KERNEL_XML_TEMPLATE.format(name=name,
+                                 ports=kernel_ports,
+                                 args=kernel_args))
 
 
 BRAM_FIFO_TEMPLATE = '''`default_nettype none
