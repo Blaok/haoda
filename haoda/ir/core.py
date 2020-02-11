@@ -130,6 +130,7 @@ Var: name=ID ('[' idx=Int ']')*;
 
 # pylint: disable=protected-access
 
+
 class Node:
   """A immutable, hashable IR node.
   """
@@ -518,7 +519,7 @@ class Operand(Node):
       val = getattr(self, attr)
       if val is not None:
         if hasattr(val, 'haoda_type'):
-          return ir.Type(val.haoda_type)
+          return val.haoda_type
         if attr == 'num':
           if 'u' in val.lower():
             if 'll' in val.lower():
@@ -564,7 +565,7 @@ class Call(Node):
     if self.name in ('select',):
       if any(self.arg[idx].haoda_type is None for idx in (1, 2)):
         return None
-      return util.common_type(self.arg[1].haoda_type, self.arg[2].haoda_type)
+      return self.arg[1].haoda_type.common_type(self.arg[2].haoda_type)
     return self.arg[0].haoda_type
 
   def _get_expr(self, lang: str) -> str:

@@ -25,13 +25,18 @@ HAODA_TYPE_TO_CL_TYPE = {
 
 class Type:
 
-  def __init__(self, val: str):
+  def __init__(self, val: Optional[str]):
+    if not isinstance(val, (str, type(None))):
+      raise TypeError('Type can only be constructed from str or NoneType, '
+                      'got ' + type(val).__name__)
     self._val = val
 
   def __str__(self) -> str:
-    return self._val
+    return str(self._val)
 
   def __hash__(self) -> int:
+    if self._val is None:
+      return hash(None)
     return self.width_in_bits
 
   def __eq__(self, other: Any) -> bool:
@@ -48,7 +53,7 @@ class Type:
     return self_val == other_val
 
   @cached_property
-  def c_type(self) -> str:
+  def c_type(self) -> Optional[str]:
     if self._val in {
         'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64'
     }:
@@ -77,9 +82,9 @@ class Type:
       for prefix in 'uint', 'int', 'float':
         if self._val.startswith(prefix):
           return int(self._val.lstrip(prefix).split('_')[0])
-    else:
-      if hasattr(self._val, 'haoda_type'):
-        return self._val.haoda_type.width_in_bits
+    elif hasattr(self._val, 'haoda_type'):
+      assert self._val is not None
+      return self._val.haoda_type.width_in_bits
     raise haoda.util.InternalError('unknown haoda type: %s' % self._val)
 
   @cached_property
@@ -98,6 +103,11 @@ class Type:
     Returns:
       The common type of two operands.
     """
+    if self._val is None:
+      return self
+    # pylint: disable=protected-access
+    if other._val is None:
+      return other
     if self.is_float and not other.is_float:
       return self
     if other.is_float and not self.is_float:
@@ -108,10 +118,14 @@ class Type:
 
   @cached_property
   def is_float(self) -> bool:
+    if self._val is None:
+      return False
     return self._val in {'half', 'double'} or self._val.startswith('float')
 
   @cached_property
   def is_fixed(self) -> bool:
+    if self._val is None:
+      return False
     for token in ('int', 'uint'):
       if self._val.startswith(token):
         bits = self._val.replace(token, '').split('_')
