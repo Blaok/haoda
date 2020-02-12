@@ -26,6 +26,19 @@ class InputError(Exception):
   pass
 
 
+class MetaFmt:
+  """Factory class that generates format strings"""
+
+  def __init__(self, fmt: str):
+    self.fmt = fmt
+
+  def __getitem__(self, key) -> str:
+    return self.fmt % key
+
+  def __call__(self, *key) -> str:
+    return self.fmt % key
+
+
 class Printer:
   """A text-based code printer."""
 
@@ -43,6 +56,16 @@ class Printer:
       self._out.write('%s%s\n' % (' ' * indent * self._tab, line))
     else:
       self._out.write('\n')
+
+  def printlns(self, lines: Union[Iterable[str], str],
+               *extra_lines: str) -> None:
+    if isinstance(lines, str):
+      self.println(lines)
+    else:
+      for line in lines:
+        self.println(line)
+    for line in extra_lines:
+      self.println(line)
 
   def do_indent(self) -> None:
     self._indent += 1
@@ -168,7 +191,7 @@ def print_guard(printer: CppPrinter, var: str, val: str) -> None:
   printer.println('#endif  //%s != %s' % (var, val))
   printer.println('#endif  //%s' % var)
 
-  
+
 def get_haoda_type(c_type: str) -> str:
   return c_type[:-2] if c_type[-2:] == '_t' else c_type
 
