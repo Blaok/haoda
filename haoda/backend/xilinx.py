@@ -604,12 +604,13 @@ endmodule  // fifo_srl
 AUTO_FIFO_TEMPLATE = '''`default_nettype none
 
 // first-word fall-through (FWFT) FIFO
-// if its capacity > 1024 bits, it uses block RAM, otherwise it will uses shift
-// register LUT
+// if its capacity > THRESHOLD bits, it uses block RAM, otherwise it will uses
+// shift register LUT
 module {name} #(
   parameter DATA_WIDTH = 32,
   parameter ADDR_WIDTH = 5,
-  parameter DEPTH      = 32
+  parameter DEPTH      = 32,
+  parameter THRESHOLD  = 18432
 ) (
   input wire clk,
   input wire reset,
@@ -628,7 +629,7 @@ module {name} #(
 );
 
 generate
-  if (DATA_WIDTH * DEPTH > 1024) begin : bram
+  if (DATA_WIDTH * DEPTH > THRESHOLD) begin : bram
     fifo_bram #(
       .DATA_WIDTH(DATA_WIDTH),
       .ADDR_WIDTH(ADDR_WIDTH),
