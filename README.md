@@ -14,11 +14,11 @@ Reusable Python utilities for hardware-aware optimization and design automation.
 
 ### Prerequisites
 
-+ Python 3.5+ and corresponding `pip`
++ Python 3.6+ and corresponding `pip`
 
-<details><summary>How to install Python 3.5+ on Ubuntu 16.04+ and CentOS 7?</summary>
+<details><summary>How to install Python 3.6+ on Ubuntu 18.04+ and CentOS 7?</summary>
 
-#### Ubuntu 16.04+
+#### Ubuntu 18.04+
 
 ```bash
 sudo apt install python3 python3-pip
