@@ -262,13 +262,13 @@ def get_device_info(platform_path: str):
   device_name = os.path.basename(platform_path)
   try:
     platform_file = next(
-        filter(os.path.isfile,
-               (os.path.join(platform_path, 'hw', f'{device_name}.{ext}')
-                for ext in ('xsa', 'dsa'))))
+        glob.iglob(os.path.join(glob.escape(platform_path), 'hw', f'*.[xd]sa')))
   except StopIteration as e:
     raise ValueError('cannot find platform file for %s' % device_name) from e
   with zipfile.ZipFile(platform_file) as platform:
-    with platform.open(device_name + '.hpfm') as metadata:
+    # platform_file must end with .xsa or .dsa, thus [:-4]
+    with platform.open(os.path.basename(platform_file)[:-4] +
+                       '.hpfm') as metadata:
       platform_info = ET.parse(metadata).find('./xd:component/xd:platformInfo',
                                               XILINX_XML_NS)
       if platform_info is None:
