@@ -1068,7 +1068,7 @@ class DRAMRef(Node):
     return str(self)
 
   def __hash__(self):
-    return hash((self.dram, self.offset))
+    return hash((self.var, self.dram, self.offset))
 
   def __eq__(self, other):
     if (self.haoda_type is not None and other.haoda_type is not None and
@@ -1076,7 +1076,7 @@ class DRAMRef(Node):
       return False
     return all(
         getattr(self, attr) == getattr(other, attr)
-        for attr in ('dram', 'offset'))
+        for attr in ('var', 'dram', 'offset'))
 
   def _get_expr(self, lang: str) -> str:
     return str(self)
