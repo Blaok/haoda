@@ -716,7 +716,7 @@ class Module():
 
   @property
   def name(self):
-    return 'module_%u' % hash(self)
+    return 'module_%x' % id(self)
 
   @property
   def fifos(self):
