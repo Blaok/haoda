@@ -2,7 +2,7 @@ import collections
 import copy
 import logging
 import math
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import cached_property
 
@@ -712,7 +712,7 @@ class Module():
     self.parents = []
     self.children = []
     self.lets = []
-    self.exprs = collections.OrderedDict()
+    self.exprs: Dict[FIFO, ir.Node] = {}
 
   @property
   def name(self):
@@ -741,19 +741,19 @@ class Module():
     return obj
 
   @property
-  def dram_reads(self):
+  def dram_reads(self) -> Tuple[Tuple['DRAMRef', int], ...]:
     return self._interfaces['dram_reads']
 
   @property
-  def dram_writes(self):
+  def dram_writes(self) -> Tuple[Tuple['DRAMRef', int], ...]:
     return self._interfaces['dram_writes']
 
   @property
-  def input_fifos(self):
+  def input_fifos(self) -> Tuple[str, ...]:
     return self._interfaces['input_fifos']
 
   @property
-  def output_fifos(self):
+  def output_fifos(self) -> Tuple[str, ...]:
     return self._interfaces['output_fifos']
 
   @cached_property.cached_property
