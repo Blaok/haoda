@@ -13,7 +13,7 @@ from typing import (BinaryIO, Iterable, Iterator, Mapping, Optional, TextIO,
                     Tuple, Union)
 
 from haoda import util
-from haoda.backend.common import Cat, Arg
+from haoda.backend.common import Arg, Cat
 
 _logger = logging.getLogger().getChild(__name__)
 
@@ -322,10 +322,11 @@ def print_kernel_xml(name: str, args: Iterable[Arg], kernel_xml: TextIO):
 
   Args:
     top_name: Name of the kernel.
-    args: Iterable of Arg.
+    args: Iterable of Arg. The `port` field should not include any prefix and
+        could be an empty string to connect the argument to a default port.
     kernel_xml: File object to write to.
   """
-  kernel_ports = S_AXI_PORT
+  kernel_ports = S_AXI_PORT.rstrip('\n')
   kernel_args = ''
   offset = 0x10
   for arg_id, arg in enumerate(args):
@@ -333,17 +334,17 @@ def print_kernel_xml(name: str, args: Iterable[Arg], kernel_xml: TextIO):
       addr_qualifier = 0  # scalar
       host_size = arg.width // 8
       size = max(4, host_size)
-      port_name = S_AXI_NAME
+      port_name = arg.port or S_AXI_NAME
     elif arg.cat == Cat.MMAP:
       addr_qualifier = 1  # mmap
       size = host_size = 8  # 64-bit
-      port_name = M_AXI_PREFIX + arg.name
-      kernel_ports += M_AXI_PORT_TEMPLATE.format(name=arg.name,
+      port_name = M_AXI_PREFIX + (arg.port or arg.name)
+      kernel_ports += M_AXI_PORT_TEMPLATE.format(name=arg.port or arg.name,
                                                  width=arg.width).rstrip('\n')
     elif arg.cat in {Cat.ISTREAM, Cat.OSTREAM}:
       addr_qualifier = 4  # stream
       size = host_size = 8  # 64-bit
-      port_name = arg.name
+      port_name = arg.port or arg.name
       mode = 'read_only' if arg.cat == Cat.ISTREAM else 'write_only'
       kernel_ports += AXIS_PORT_TEMPLATE.format(name=arg.name,
                                                 mode=mode,
