@@ -291,7 +291,7 @@ def get_device_info(platform_path: str):
 KERNEL_XML_TEMPLATE = r'''
 <?xml version="1.0" encoding="UTF-8"?>
 <root versionMajor="1" versionMinor="6">
-  <kernel name="{name}" language="ip_c" vlnv="haoda:xrtl:{name}:1.0" attributes="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" interrupt="true" hwControlProtocol="ap_ctrl_hs">
+  <kernel name="{name}" language="ip_c" vlnv="haoda:xrtl:{name}:1.0" attributes="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" interrupt="true" hwControlProtocol="{hw_ctrl_protocol}">
     <ports>{ports}
     </ports>
     <args>{args}
@@ -326,29 +326,34 @@ def print_kernel_xml(name: str, args: Iterable[Arg], kernel_xml: TextIO):
         could be an empty string to connect the argument to a default port.
     kernel_xml: File object to write to.
   """
-  kernel_ports = S_AXI_PORT.rstrip('\n')
+  kernel_ports = ''
   kernel_args = ''
   offset = 0x10
+  has_s_axi_control = False
   for arg_id, arg in enumerate(args):
+    is_stream = False
     if arg.cat == Cat.SCALAR:
+      has_s_axi_control = True
       addr_qualifier = 0  # scalar
       host_size = arg.width // 8
       size = max(4, host_size)
       port_name = arg.port or S_AXI_NAME
     elif arg.cat == Cat.MMAP:
+      has_s_axi_control = True
       addr_qualifier = 1  # mmap
       size = host_size = 8  # 64-bit
       port_name = M_AXI_PREFIX + (arg.port or arg.name)
       kernel_ports += M_AXI_PORT_TEMPLATE.format(name=arg.port or arg.name,
                                                  width=arg.width).rstrip('\n')
     elif arg.cat in {Cat.ISTREAM, Cat.OSTREAM}:
+      is_stream = True
       addr_qualifier = 4  # stream
       size = host_size = 8  # 64-bit
       port_name = arg.port or arg.name
       mode = 'read_only' if arg.cat == Cat.ISTREAM else 'write_only'
       kernel_ports += AXIS_PORT_TEMPLATE.format(name=arg.name,
                                                 mode=mode,
-                                                width=arg.width)
+                                                width=arg.width).rstrip('\n')
     else:
       raise NotImplementedError(f'unknown arg category: {arg.cat}')
     kernel_args += ARG_TEMPLATE.format(name=arg.name,
@@ -358,13 +363,21 @@ def print_kernel_xml(name: str, args: Iterable[Arg], kernel_xml: TextIO):
                                        c_type=xml.sax.saxutils.escape(
                                            arg.ctype),
                                        size=size,
-                                       offset=offset,
+                                       offset=0 if is_stream else offset,
                                        host_size=host_size).rstrip('\n')
-    offset += size + 4
+    if is_stream:
+      offset += size + 4
+  hw_ctrl_protocol = 'ap_ctrl_none'
+  if has_s_axi_control:
+    hw_ctrl_protocol = 'ap_ctrl_hs'
+    kernel_ports += S_AXI_PORT.rstrip('\n')
   kernel_xml.write(
-      KERNEL_XML_TEMPLATE.format(name=name,
-                                 ports=kernel_ports,
-                                 args=kernel_args))
+      KERNEL_XML_TEMPLATE.format(
+          name=name,
+          ports=kernel_ports,
+          args=kernel_args,
+          hw_ctrl_protocol=hw_ctrl_protocol,
+      ))
 
 
 BRAM_FIFO_TEMPLATE = '''`default_nettype none
