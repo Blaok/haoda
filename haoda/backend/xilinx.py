@@ -365,7 +365,7 @@ def print_kernel_xml(name: str, args: Iterable[Arg], kernel_xml: TextIO):
                                        size=size,
                                        offset=0 if is_stream else offset,
                                        host_size=host_size).rstrip('\n')
-    if is_stream:
+    if not is_stream:
       offset += size + 4
   hw_ctrl_protocol = 'ap_ctrl_none'
   if has_s_axi_control:
