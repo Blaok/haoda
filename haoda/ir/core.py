@@ -1182,9 +1182,12 @@ class ModuleTrait(Node):
     }
 
 
-def make_var(val):
+def make_var(val, haoda_type: Optional[ir.Type] = None):
   """Make literal Var from val."""
-  return Var(name=val, idx=())
+  var = Var(name=val, idx=())
+  if haoda_type is not None:
+    var.haoda_type = haoda_type
+  return var
 
 
 def is_const(node: Node) -> bool:
