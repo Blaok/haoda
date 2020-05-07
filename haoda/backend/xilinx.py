@@ -1,3 +1,4 @@
+import argparse
 import collections
 import contextlib
 import glob
@@ -9,8 +10,8 @@ import tempfile
 import xml.etree.ElementTree as ET
 import xml.sax.saxutils
 import zipfile
-from typing import (BinaryIO, Iterable, Iterator, Mapping, Optional, TextIO,
-                    Tuple, Union)
+from typing import (BinaryIO, Dict, Iterable, Iterator, Mapping, Optional,
+                    TextIO, Tuple, Union)
 
 from haoda import util
 from haoda.backend.common import Arg, Cat
@@ -286,6 +287,54 @@ def get_device_info(platform_path: str):
           'part_num':
               part_num.attrib['{{{xd}}}name'.format(**XILINX_XML_NS)]
       }
+
+
+def parse_device_info(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    platform_name: str,
+    part_num_name: str,
+    clock_period_name: str,
+) -> Dict[str, str]:
+  platform = getattr(args, platform_name)
+  part_num = getattr(args, part_num_name)
+  clock_period = getattr(args, clock_period_name)
+  option_string_table = {
+      x.dest: x.option_strings[0]
+      for x in getattr(parser, '_actions')
+      if x.dest in {platform_name, part_num_name, clock_period_name}
+  }
+
+  if platform is not None:
+    platform = os.path.join(
+        os.path.dirname(platform),
+        os.path.basename(platform).replace(':', '_').replace('.', '_'))
+  if platform is not None:
+    for platform_dir in (
+        os.path.join('/', 'opt', 'xilinx'),
+        os.environ.get('XILINX_VITIS'),
+        os.environ.get('XILINX_SDX'),
+    ):
+      if not os.path.isdir(platform) and platform_dir is not None:
+        platform = os.path.join(platform_dir, 'platforms', platform)
+  if platform is None or not os.path.isdir(platform):
+    if clock_period is None:
+      parser.error(f'{option_string_table[platform_name]} is not valid and '
+                   f'neither is {option_string_table[clock_period_name]}')
+    if part_num is None:
+      parser.error(f'{option_string_table[platform_name]} is not valid and '
+                   f'neither is {option_string_table[part_num_name]}')
+    device_info = {
+        'clock_period': clock_period,
+        'part_num': part_num,
+    }
+  else:
+    device_info = get_device_info(platform)
+    if clock_period is not None:
+      device_info['clock_period'] = clock_period
+    if part_num is not None:
+      device_info['part_num'] = part_num
+  return device_info
 
 
 KERNEL_XML_TEMPLATE = r'''
