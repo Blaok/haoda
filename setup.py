@@ -17,7 +17,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='haoda',
-    version='0.0.20200507.dev1',
+    version='0.0.20200829.dev1',
     description='Hardware-aware optimization and design automation',
     long_description=long_description,
     long_description_content_type='text/markdown',
