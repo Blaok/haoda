@@ -18,6 +18,7 @@ if {{ $ips ne "" }} {{
 }}
 {set_parallel}
 synth_design {synth_args}
+opt_design
 report_utilization {report_util_args}
 '''
 
