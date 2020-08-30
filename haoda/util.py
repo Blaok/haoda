@@ -48,14 +48,15 @@ class Printer:
     self._assign = 0
     self._comments = []  # type: List[str]
     self._tab = 2
+    self.eol = '\n'
 
   def println(self, line: str = '', indent: int = -1) -> None:
     if indent < 0:
       indent = self._indent
     if line:
-      self._out.write('%s%s\n' % (' ' * indent * self._tab, line))
+      self._out.write((' ' * indent * self._tab) + line + self.eol)
     else:
-      self._out.write('\n')
+      self._out.write(self.eol)
 
   def printlns(self, lines: Union[Iterable[str], str],
                *extra_lines: str) -> None:
