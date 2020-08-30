@@ -116,6 +116,8 @@ class CppPrinter(Printer):
         lines[-1] += param + ', '
     if lines[-1][-2:] == ', ':
       lines[-1] = lines[-1][:-2] + ')' + suffix
+    if len(lines) == 1:  # params is empty
+      lines[-1] += ')'
     line = lines.pop(0)
     self.println(line)
     if lines:
