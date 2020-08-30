@@ -101,6 +101,11 @@ class CppPrinter(Printer):
   def last_var(self, offset: int = -1) -> str:
     return 'assign_%d' % (self._assign + offset)
 
+  def println(self, line: str = '', indent: int = -1) -> None:
+    if line.startswith('#'):
+      indent = 0
+    super().println(line, indent)
+
   def print_func(self,
                  name: str,
                  params: Iterable[str],
