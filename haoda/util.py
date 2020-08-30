@@ -58,15 +58,15 @@ class Printer:
     else:
       self._out.write(self.eol)
 
-  def printlns(self, lines: Union[Iterable[str], str],
-               *extra_lines: str) -> None:
+  def printlns(self, lines: Union[Iterable[str], str], *extra_lines: str,
+               **kwargs) -> None:
     if isinstance(lines, str):
-      self.println(lines)
+      self.println(lines, **kwargs)
     else:
       for line in lines:
-        self.println(line)
+        self.println(line, **kwargs)
     for line in extra_lines:
-      self.println(line)
+      self.println(line, **kwargs)
 
   def do_indent(self) -> None:
     self._indent += 1
