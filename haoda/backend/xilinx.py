@@ -319,11 +319,12 @@ def parse_device_info(
         platform = os.path.join(platform_dir, 'platforms', platform)
   if platform is None or not os.path.isdir(platform):
     if clock_period is None:
-      parser.error(f'{option_string_table[platform_name]} is not valid and '
-                   f'neither is {option_string_table[clock_period_name]}')
+      parser.error(
+          f'either a valid {option_string_table[platform_name]} or '
+          f'a valid {option_string_table[clock_period_name]} is required')
     if part_num is None:
-      parser.error(f'{option_string_table[platform_name]} is not valid and '
-                   f'neither is {option_string_table[part_num_name]}')
+      parser.error(f'either a valid {option_string_table[platform_name]} or '
+                   f'a valid {option_string_table[part_num_name]} is required')
     device_info = {
         'clock_period': clock_period,
         'part_num': part_num,
