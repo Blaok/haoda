@@ -435,7 +435,7 @@ BRAM_FIFO_TEMPLATE = '''`default_nettype none
 // first-word fall-through (FWFT) FIFO using block RAM
 // based on HLS generated code
 module {name} #(
-  parameter MEM_STYLE  = "block",
+  parameter MEM_STYLE  = "auto",
   parameter DATA_WIDTH = {width},
   parameter ADDR_WIDTH = {addr_width},
   parameter DEPTH      = {depth}
