@@ -148,4 +148,6 @@ class Type:
            ), "burst width must be a multiple of width of the scalar type"
     assert (self._val in HAODA_TYPE_TO_CL_TYPE), "scalar type not supported"
 
+    if burst_width == scalar_width:
+      return HAODA_TYPE_TO_CL_TYPE[self._val]
     return HAODA_TYPE_TO_CL_TYPE[self._val] + str(burst_width // scalar_width)
