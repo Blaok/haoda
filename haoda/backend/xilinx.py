@@ -55,14 +55,15 @@ class VivadoHls(subprocess.Popen):
 
   Args:
     commands: A string of Tcl commands.
+    hls: Either 'vivado_hls' or 'vitis_hls'.
   """
 
-  def __init__(self, commands: str):
-    self.cwd = tempfile.TemporaryDirectory(prefix='vivado-hls-')
+  def __init__(self, commands: str, hls: str = 'vivado_hls'):
+    self.cwd = tempfile.TemporaryDirectory(prefix=f'{hls}-')
     with open(os.path.join(self.cwd.name, 'commands.tcl'),
               mode='w+') as tcl_file:
       tcl_file.write(commands)
-    cmd_args = ['vivado_hls', '-f', tcl_file.name]
+    cmd_args = [hls, '-f', tcl_file.name]
     pipe_args = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE}
     super().__init__(cmd_args, cwd=self.cwd.name, **pipe_args)  # type: ignore
 
@@ -169,7 +170,7 @@ set_part {{{part_num}}}
 create_clock -period {clock_period} -name default
 config_compile -name_max_length 253
 config_interface -m_axi_addr64
-config_rtl -disable_start_propagation -reset_level {reset_level}{auto_prefix}
+{config}
 csynth_design
 exit
 '''
@@ -187,20 +188,28 @@ class RunHls(VivadoHls):
     top_name: Top-level module name.
     clock_period: Target clock period.
     part_num: Target part number.
+    reset_low: In `config_rtl`, `-reset_level low` or `-reset_level high`.
+    auto_prefix: In `config_rtl`, add `-auto_prefix` or not. Note that Vitis HLS
+        2020.2 enables this option regardless of the option here.
+    hls: Either 'vivado_hls' or 'vitis_hls'.
   """
 
-  def __init__(self,
-               tarfileobj: BinaryIO,
-               kernel_files: Iterable[Union[str, Tuple[str, str]]],
-               top_name: str,
-               clock_period: str,
-               part_num: str,
-               reset_low: bool = True,
-               auto_prefix: bool = False):
+  def __init__(
+      self,
+      tarfileobj: BinaryIO,
+      kernel_files: Iterable[Union[str, Tuple[str, str]]],
+      top_name: str,
+      clock_period: str,
+      part_num: str,
+      reset_low: bool = True,
+      auto_prefix: bool = False,
+      hls: str = 'vivado_hls',
+  ):
     self.project_dir = tempfile.TemporaryDirectory(prefix='run-hls-')
     self.project_name = 'project'
     self.solution_name = top_name
     self.tarfileobj = tarfileobj
+    self.hls = hls
     kernels = []
     for kernel_file in kernel_files:
       if isinstance(kernel_file, str):
@@ -209,6 +218,12 @@ class RunHls(VivadoHls):
       else:
         kernels.append(
             'add_files "{}" -cflags "-std=c++11 {}"'.format(*kernel_file))
+    rtl_config = 'config_rtl -reset_level ' + ('low' if reset_low else 'high')
+    if auto_prefix:
+      if hls == 'vivado_hls':
+        rtl_config += ' -auto_prefix'
+      elif hls == 'vitis_hls':
+        rtl_config += ' -module_auto_prefix'
     kwargs = {
         'project_dir': self.project_dir.name,
         'project_name': self.project_name,
@@ -217,10 +232,9 @@ class RunHls(VivadoHls):
         'add_kernels': '\n'.join(kernels),
         'part_num': part_num,
         'clock_period': clock_period,
-        'reset_level': 'low' if reset_low else 'high',
-        'auto_prefix': ' -auto_prefix' if auto_prefix else ''
+        'config': rtl_config,
     }
-    super().__init__(HLS_COMMANDS.format(**kwargs))
+    super().__init__(HLS_COMMANDS.format(**kwargs), hls)
 
   def __exit__(self, *args):
     self.wait()
@@ -231,7 +245,7 @@ class RunHls(VivadoHls):
         try:
           tar.add(os.path.join(solution_dir, 'syn/report'), arcname='report')
           tar.add(os.path.join(solution_dir, 'syn/verilog'), arcname='hdl')
-          tar.add(os.path.join(solution_dir, self.cwd.name, 'vivado_hls.log'),
+          tar.add(os.path.join(solution_dir, self.cwd.name, f'{self.hls}.log'),
                   arcname='log/' + self.solution_name + '.log')
           for pattern in ('*.sched.adb.xml', '*.verbose.sched.rpt',
                           '*.verbose.sched.rpt.xml'):
