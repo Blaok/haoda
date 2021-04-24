@@ -237,7 +237,8 @@ class RunHls(VivadoHls):
     super().__init__(HLS_COMMANDS.format(**kwargs), hls)
 
   def __exit__(self, *args):
-    self.wait()
+    # wait for process termination and keep the log
+    subprocess.Popen.__exit__(self, *args)
     if self.returncode == 0:
       with tarfile.open(mode='w', fileobj=self.tarfileobj) as tar:
         solution_dir = os.path.join(self.project_dir.name, self.project_name,
