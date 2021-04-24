@@ -909,11 +909,11 @@ class Module():
 
 
 class DelayedRef(Node):
-  """A delayed FIFO reference.
+  """A delayed Node reference.
 
   Attributes:
     delay: int
-    ref: FIFO
+    ref: Node
   """
   SCALAR_ATTRS = ('delay', 'ref')
 
@@ -986,7 +986,7 @@ class DelayedRef(Node):
 
   @property
   def c_buf_store(self):
-    return '{} = {};'.format(self.c_buf_ref, self.ref.ref_name)
+    return '{} = {};'.format(self.c_buf_ref, self.ref.c_expr)
 
   @property
   def c_next_ptr_expr(self):
