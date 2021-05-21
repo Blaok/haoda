@@ -938,19 +938,24 @@ class DelayedRef(Node):
         for attr in ('delay', 'ref'))
 
   @property
+  def identifier(self) -> str:
+    ref = getattr(self.ref, 'identifier', self.ref.c_expr)
+    return f'{ref}_delayed_{self.delay}'
+
+  @property
   def buf_name(self):
-    return '{ref.c_expr}_delayed_{delay}_buf'.format(**self.__dict__)
+    return f'{self.identifier}_buf'
 
   @property
   def ptr(self):
-    return '{ref.c_expr}_delayed_{delay}_ptr'.format(**self.__dict__)
+    return f'{self.identifier}_ptr'
 
   @property
   def ptr_type(self):
     return ir.Type('uint%d' % int(math.log2(self.delay) + 1))
 
   def _get_expr(self, lang: str) -> str:
-    return '{}_delayed_{}'.format(self.ref._get_expr(lang), self.delay)
+    return self.identifier
 
   @property
   def c_ptr_type(self):
