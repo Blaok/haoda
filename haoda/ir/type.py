@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Iterable, Iterator, Optional
 
 from cached_property import cached_property
 
@@ -151,3 +151,65 @@ class Type:
     if burst_width == scalar_width:
       return HAODA_TYPE_TO_CL_TYPE[self._val]
     return HAODA_TYPE_TO_CL_TYPE[self._val] + str(burst_width // scalar_width)
+
+
+class TupleType(Type):
+
+  def __init__(self, val: Iterable[Type]):
+    self._types = tuple(val)
+
+  def __str__(self) -> str:
+    return 'haoda_%s_tuple' % '_'.join(map(str, self._types))
+
+  def __hash__(self) -> int:
+    return hash(self._types)
+
+  def __eq__(self, other: Any) -> bool:
+    if not isinstance(other, Type):
+      return NotImplemented
+    if not isinstance(other, TupleType):
+      return False
+    return self._types == other._types
+
+  def __getitem__(self, idx: int) -> Type:
+    return self._types[idx]
+
+  def __iter__(self) -> Iterator[Type]:
+    return iter(self._types)
+
+  def __len__(self) -> int:
+    return len(self._types)
+
+  @property
+  def c_type(self) -> str:
+    return 'std::tuple<%s>' % ', '.join(x.c_type for x in self._types)
+
+  @property
+  def cl_type(self) -> str:
+    return 'haoda_%s_tuple' % '_'.join(x.cl_type for x in self._types)
+
+  @property
+  def width_in_bits(self) -> int:
+    return sum(x.width_in_bits for x in self._types)
+
+  @property
+  def cl_type_def(self) -> str:
+    return '\n'.join([
+        'typedef struct __attribute__((packed)) {',
+        *(f'  {t.cl_type} val_{i};' for i, t in enumerate(self._types)),
+        f'}} {self.cl_type};',
+    ])
+
+  def common_type(self, other):
+    raise TypeError
+
+  @property
+  def is_float(self) -> bool:
+    raise TypeError
+
+  @property
+  def is_fixed(self) -> bool:
+    raise TypeError
+
+  def get_cl_vec_type(self, burst_width):
+    raise TypeError

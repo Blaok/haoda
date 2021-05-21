@@ -30,8 +30,10 @@ __all__ = (
     'MulDiv',
     'Node',
     'Operand',
+    'Pack',
     'Ref',
     'Unary',
+    'Unpack',
     'Var',
     'Xor',
     'from_reduction',
@@ -1193,6 +1195,52 @@ class ModuleTrait(Node):
         'input_fifos': input_fifos,
         'dram_reads': dram_reads
     }
+
+
+class Pack(Node):
+  LINEAR_ATTRS = ('exprs',)
+
+  exprs: Sequence[Node]
+
+  def __str__(self) -> str:
+    return '{%s}' % ', '.join(map(str, self.exprs))
+
+  def _get_haoda_type(self) -> ir.TupleType:
+    return ir.TupleType(x.haoda_type for x in self.exprs)
+
+  def _get_expr(self, lang: str) -> str:
+    args = ', '.join(x._get_expr(lang) for x in self.exprs)
+    if lang == 'c':
+      return f'{{{args}}}'
+    if lang == 'cl':
+      return f'({self.cl_type}){{{args}}}'
+    raise NotImplementedError
+
+
+class Unpack(Node):
+  SCALAR_ATTRS = ('expr', 'idx')
+
+  expr: Node
+  idx: int
+
+  def __str__(self) -> str:
+    return f'{{{self.expr}}}[{self.idx}]'
+
+  def _get_haoda_type(self) -> ir.Type:
+    assert isinstance(self.expr.haoda_type, ir.TupleType)
+    return self.expr.haoda_type[self.idx]
+
+  def _get_expr(self, lang: str) -> str:
+    if lang == 'c':
+      return f'std::get<{self.idx}>({self.expr._get_expr(lang)})'
+    if lang == 'cl':
+      return f'{self.expr._get_expr(lang)}.val_{self.idx}'
+    raise NotImplementedError
+
+  @property
+  def identifier(self) -> str:
+    expr = getattr(self.expr, 'identifier', self.expr.c_expr)
+    return f'{expr}_val_{self.idx}'
 
 
 def make_var(val, haoda_type: Optional[ir.Type] = None):
