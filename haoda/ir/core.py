@@ -990,8 +990,16 @@ class DelayedRef(Node):
     return '{} = {};'.format(self.c_expr, self.c_buf_ref)
 
   @property
+  def cl_buf_load(self):
+    return f'{self.cl_expr} = {self.c_buf_ref};'
+
+  @property
   def c_buf_store(self):
     return '{} = {};'.format(self.c_buf_ref, self.ref.c_expr)
+
+  @property
+  def cl_buf_store(self):
+    return f'{self.c_buf_ref} = {self.ref.cl_expr};'
 
   @property
   def c_next_ptr_expr(self):
