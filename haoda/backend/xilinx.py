@@ -204,6 +204,7 @@ class RunHls(VivadoHls):
       reset_low: bool = True,
       auto_prefix: bool = False,
       hls: str = 'vivado_hls',
+      std: str = 'c++11',
   ):
     self.project_dir = tempfile.TemporaryDirectory(prefix='run-hls-')
     self.project_name = 'project'
@@ -214,10 +215,10 @@ class RunHls(VivadoHls):
     for kernel_file in kernel_files:
       if isinstance(kernel_file, str):
         kernels.append(
-            'add_files "{}" -cflags "-std=c++11"'.format(kernel_file))
+            f'add_files "{{}}" -cflags "-std={std}"'.format(kernel_file))
       else:
         kernels.append(
-            'add_files "{}" -cflags "-std=c++11 {}"'.format(*kernel_file))
+            f'add_files "{{}}" -cflags "-std={std} {{}}"'.format(*kernel_file))
     rtl_config = 'config_rtl -reset_level ' + ('low' if reset_low else 'high')
     if auto_prefix:
       if hls == 'vivado_hls':
