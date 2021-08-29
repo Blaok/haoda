@@ -58,18 +58,22 @@ class VivadoHls(subprocess.Popen):
     hls: Either 'vivado_hls' or 'vitis_hls'.
   """
 
-  def __init__(self, commands: str, hls: str = 'vivado_hls'):
-    self.cwd = tempfile.TemporaryDirectory(prefix=f'{hls}-')
-    with open(os.path.join(self.cwd.name, 'commands.tcl'),
-              mode='w+') as tcl_file:
+  def __init__(self, commands: str, hls: str = 'vivado_hls', cwd: str = ''):
+    if cwd:
+      self.cwd = cwd
+    else:
+      self.cwd = tempfile.TemporaryDirectory(prefix=f'{hls}-')
+      cwd = self.cwd.name
+    with open(os.path.join(cwd, 'commands.tcl'), mode='w+') as tcl_file:
       tcl_file.write(commands)
     cmd_args = [hls, '-f', tcl_file.name]
     pipe_args = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE}
-    super().__init__(cmd_args, cwd=self.cwd.name, **pipe_args)  # type: ignore
+    super().__init__(cmd_args, cwd=cwd, **pipe_args)  # type: ignore
 
   def __exit__(self, *args) -> None:
     super().__exit__(*args)
-    self.cwd.cleanup()
+    if isinstance(self.cwd, tempfile.TemporaryDirectory):
+      self.cwd.cleanup()
 
 
 PACKAGEXO_COMMANDS = r'''
@@ -206,7 +210,8 @@ class RunHls(VivadoHls):
       hls: str = 'vivado_hls',
       std: str = 'c++11',
   ):
-    self.project_dir = tempfile.TemporaryDirectory(prefix='run-hls-')
+    self.project_dir = tempfile.TemporaryDirectory(
+        prefix=f'run-hls-{top_name}-')
     self.project_name = 'project'
     self.solution_name = top_name
     self.tarfileobj = tarfileobj
@@ -235,7 +240,7 @@ class RunHls(VivadoHls):
         'clock_period': clock_period,
         'config': rtl_config,
     }
-    super().__init__(HLS_COMMANDS.format(**kwargs), hls)
+    super().__init__(HLS_COMMANDS.format(**kwargs), hls, self.project_dir.name)
 
   def __exit__(self, *args):
     # wait for process termination and keep the log
@@ -247,7 +252,8 @@ class RunHls(VivadoHls):
         try:
           tar.add(os.path.join(solution_dir, 'syn/report'), arcname='report')
           tar.add(os.path.join(solution_dir, 'syn/verilog'), arcname='hdl')
-          tar.add(os.path.join(solution_dir, self.cwd.name, f'{self.hls}.log'),
+          tar.add(os.path.join(solution_dir, self.project_dir.name,
+                               f'{self.hls}.log'),
                   arcname='log/' + self.solution_name + '.log')
           for pattern in ('*.sched.adb.xml', '*.verbose.sched.rpt',
                           '*.verbose.sched.rpt.xml'):
