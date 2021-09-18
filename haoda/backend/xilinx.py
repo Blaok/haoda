@@ -4,13 +4,14 @@ import contextlib
 import glob
 import logging
 import os
+import shlex
 import subprocess
 import tarfile
 import tempfile
 import xml.etree.ElementTree as ET
 import xml.sax.saxutils
 import zipfile
-from typing import (BinaryIO, Dict, Iterable, Iterator, Mapping, Optional,
+from typing import (BinaryIO, Dict, Iterable, Iterator, List, Mapping, Optional,
                     TextIO, Tuple, Union)
 
 from haoda import util
@@ -39,8 +40,9 @@ class Vivado(subprocess.Popen):
         'vivado', '-mode', 'batch', '-source', tcl_file.name, '-nojournal',
         '-tclargs', *args
     ]
-    pipe_args = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE}
-    super().__init__(cmd_args, cwd=self.cwd.name, **pipe_args)  # type: ignore
+    kwargs = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE}
+    cmd_args = get_cmd_args(cmd_args, ['XILINX_VIVADO'], kwargs)
+    super().__init__(cmd_args, cwd=self.cwd.name, **kwargs)  # type: ignore
 
   def __exit__(self, *args) -> None:
     super().__exit__(*args)
@@ -67,8 +69,12 @@ class VivadoHls(subprocess.Popen):
     with open(os.path.join(cwd, 'commands.tcl'), mode='w+') as tcl_file:
       tcl_file.write(commands)
     cmd_args = [hls, '-f', tcl_file.name]
-    pipe_args = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE}
-    super().__init__(cmd_args, cwd=cwd, **pipe_args)  # type: ignore
+    kwargs = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE}
+    if hls == 'vitis_hls':
+      cmd_args = get_cmd_args(cmd_args, ['XILINX_HLS', 'XILINX_VITIS'], kwargs)
+    elif hls == 'vivado_hls':
+      cmd_args = get_cmd_args(cmd_args, ['XILINX_VIVADO'], kwargs)
+    super().__init__(cmd_args, cwd=cwd, **kwargs)  # type: ignore
 
   def __exit__(self, *args) -> None:
     super().__exit__(*args)
@@ -450,6 +456,40 @@ def print_kernel_xml(name: str, args: Iterable[Arg], kernel_xml: TextIO):
           args=kernel_args,
           hw_ctrl_protocol=hw_ctrl_protocol,
       ))
+
+
+def get_cmd_args(
+    cmd_args: List[str],
+    env_names: Iterable[str],
+    kwargs: Dict[str, bool],
+) -> Union[List[str], str]:
+  """Get command arguments for subprocess.Popen with specified environment.
+
+  Args:
+    cmd_args: The original command arguments.
+    env_names: Environment variable names to try.
+    kwargs: Keyword arguments to subprocess.Popen. This will be updated if
+        necessary.
+
+  Returns:
+    Command arguments for subprocess.Popen, with env_name/settings64.sh sourced
+    if it exists.
+  """
+  for env_name in env_names:
+    env_value = os.environ.get(env_name)
+    if env_value is not None:
+      settings = f'{env_value}/settings64.sh'
+      if os.path.isfile(settings):
+        kwargs['shell'] = True
+        kwargs['executable'] = 'bash'
+        return ' '.join([
+            'source',
+            shlex.quote(settings),
+            ';',
+            'exec',
+            *map(shlex.quote, cmd_args),
+        ])
+  return cmd_args
 
 
 BRAM_FIFO_TEMPLATE = '''`default_nettype none
