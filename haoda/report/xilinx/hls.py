@@ -79,8 +79,15 @@ class HlsResources:
     if item == 'Resources':
       self.name = elem.findtext('UserAssignments/TopModelName')
     for resource in HlsResources.RESOURCES:
-      self[resource] = int(
-          elem.findtext('/'.join(('AreaEstimates', item, resource))))
+      value = elem.findtext('/'.join(('AreaEstimates', item, resource)))
+      if value is None:
+        if resource == 'DSP48E':
+          value = elem.findtext('/'.join(('AreaEstimates', item, 'DSP')))
+        elif resource == 'URAM':
+          value = 0
+        else:
+          raise BadReport(f'cannot find {resource}')
+      self[resource] = int(value)
     return self
 
   def __getitem__(self, key: str) -> int:
