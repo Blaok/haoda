@@ -1205,6 +1205,8 @@ class Pack(Node):
 
   exprs: Sequence[Node]
 
+  _name_dict = {}
+
   def __str__(self) -> str:
     return '{%s}' % ', '.join(map(str, self.exprs))
 
@@ -1218,6 +1220,12 @@ class Pack(Node):
     if lang == 'cl':
       return f'({self.cl_type}){{{args}}}'
     raise NotImplementedError
+
+  @property
+  def identifier(self) -> str:
+    long_name = '_'.join(getattr(x, 'identifier', x.c_expr) for x in self.exprs)
+    short_name = Pack._name_dict.setdefault(long_name, len(Pack._name_dict))
+    return 'pack_%d' % short_name
 
 
 class Unpack(Node):
