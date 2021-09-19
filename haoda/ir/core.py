@@ -708,6 +708,8 @@ class Module():
     exprs: Dict of {FIFO: haoda.ir.Expr}, stores an output's expression.
   """
 
+  _id_dict = {}
+
   def __init__(self):
     """Initializes attributes into empty list or dict.
     """
@@ -718,7 +720,8 @@ class Module():
 
   @property
   def name(self):
-    return 'module_%x' % id(self)
+    id_ = Module._id_dict.setdefault(id(self), len(Module._id_dict))
+    return f'module_{id_}'
 
   @property
   def fifos(self):
