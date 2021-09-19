@@ -19,7 +19,7 @@ class HlsResources:
     RESOURCES: Static, resource attribute names expected.
     name: Optional name of the module.
   """
-  RESOURCES = 'FF', 'LUT', 'BRAM_18K', 'DSP48E'
+  RESOURCES = 'FF', 'LUT', 'BRAM_18K', 'DSP48E', 'URAM'
 
   def __init__(self,
                obj: Union['HlsResources', ET.Element, TextIO, None] = None
