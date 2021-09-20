@@ -182,7 +182,7 @@ class TupleType(Type):
 
   @property
   def c_type(self) -> str:
-    return 'std::tuple<%s>' % ', '.join(x.c_type for x in self._types)
+    return '::haoda::tuple_%s' % '_'.join(x.c_type for x in self._types)
 
   @property
   def cl_type(self) -> str:
@@ -191,6 +191,16 @@ class TupleType(Type):
   @property
   def width_in_bits(self) -> int:
     return sum(x.width_in_bits for x in self._types)
+
+  @property
+  def c_type_def(self) -> str:
+    return '\n'.join([
+        'namespace haoda {',
+        'struct tuple_%s {' % '_'.join(x.c_type for x in self._types),
+        *(f'  {t.c_type} val_{i};' for i, t in enumerate(self._types)),
+        '};',
+        '}',
+    ])
 
   @property
   def cl_type_def(self) -> str:

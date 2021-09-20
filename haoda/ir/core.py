@@ -1242,11 +1242,7 @@ class Unpack(Node):
     return self.expr.haoda_type[self.idx]
 
   def _get_expr(self, lang: str) -> str:
-    if lang == 'c':
-      return f'std::get<{self.idx}>({self.expr._get_expr(lang)})'
-    if lang == 'cl':
-      return f'{self.expr._get_expr(lang)}.val_{self.idx}'
-    raise NotImplementedError
+    return f'{self.expr._get_expr(lang)}.val_{self.idx}'
 
   @property
   def identifier(self) -> str:
