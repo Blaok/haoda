@@ -953,11 +953,11 @@ class DelayedRef(Node):
 
   @property
   def ptr(self):
-    return f'{self.identifier}_ptr'
+    return f'ptr_delay_{self.delay}'
 
   @property
   def ptr_type(self):
-    return ir.Type('uint%d' % int(math.log2(self.delay) + 1))
+    return ir.Type('uint%d' % max(self.delay - 1, 1).bit_length())
 
   def _get_expr(self, lang: str) -> str:
     return self.identifier
@@ -1008,12 +1008,12 @@ class DelayedRef(Node):
 
   @property
   def c_next_ptr_expr(self):
-    return '{ptr} < {depth} ? {c_ptr_type}({ptr}+1) : {c_ptr_type}(0)'.format(
+    return '{ptr} < {depth} ? (++{ptr}) : ({ptr} = 0)'.format(
         ptr=self.ptr, c_ptr_type=self.c_ptr_type, depth=self.delay - 1)
 
   @property
   def cl_next_ptr_expr(self):
-    return '{ptr} < {depth} ? ({ptr_type})({ptr}+1) : ({ptr_type})0'.format(
+    return '{ptr} < {depth} ? (++{ptr}) : ({ptr} = 0)'.format(
         ptr=self.ptr, ptr_type=self.cl_ptr_type, depth=self.delay - 1)
 
 
