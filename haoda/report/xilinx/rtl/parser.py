@@ -17,6 +17,7 @@ _logger = logging.getLogger().getChild(__name__)
 
 class HierarchicalUtilization:
   """Semantic-agnostic hierarchical utilization."""
+  device: str
   parent: Optional['HierarchicalUtilization']
   children: List['HierarchicalUtilization']
   instance: str
@@ -25,6 +26,7 @@ class HierarchicalUtilization:
 
   def __init__(
       self,
+      device: str,
       instance: str,
       schema: Dict[str, int],
       items: Tuple[str, ...],
@@ -32,6 +34,7 @@ class HierarchicalUtilization:
   ) -> None:
     if len(schema) != len(items):
       raise TypeError('mismatching schema and items')
+    self.device = device
     self.parent = parent
     self.children = []
     if parent is not None:
@@ -70,9 +73,14 @@ def parse_hierarchical_utilization_report(
 
   parse_state = ParseState.PROLOG
   stack: List[HierarchicalUtilization] = []
+  device = ''
 
   for line in rpt_file:
     line = line.strip()
+    items = line.split()
+    if len(items) == 4 and items[:3] == ['|', 'Device', ':']:
+      device = items[3]
+      continue
     if set(line) == {'+', '-'}:
       if parse_state == ParseState.PROLOG:
         parse_state = ParseState.HEADER
@@ -95,7 +103,8 @@ def parse_hierarchical_utilization_report(
         stack.pop()
       instance = instance.lstrip()
       parent = stack[-1] if stack else None
-      stack.append(HierarchicalUtilization(instance, schema, items, parent))
+      stack.append(
+          HierarchicalUtilization(device, instance, schema, items, parent))
 
   return stack[0]
 
