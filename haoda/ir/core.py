@@ -710,16 +710,24 @@ class Module():
 
   _id_dict = {}
 
-  def __init__(self):
+  def __init__(self, name: str = ''):
     """Initializes attributes into empty list or dict.
+
+    Args:
+      name: Specify a name for the module. Unlike the default name generated
+        based on a global sequential unique ID, the user is responsible for
+        making sure the name is unique (if that is desired).
     """
     self.parents = []
     self.children = []
     self.lets = []
     self.exprs: Dict[FIFO, ir.Node] = {}
+    self._name = name
 
   @property
   def name(self):
+    if self._name:
+      return self._name
     id_ = Module._id_dict.setdefault(id(self), len(Module._id_dict))
     return f'module_{id_}'
 
