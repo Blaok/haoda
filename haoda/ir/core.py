@@ -792,10 +792,10 @@ class Module():
     }
 
   def __str__(self):
-    return '%s @ 0x%x: %s' % (type(self).__name__, id(self), self.__dict__)
+    return f'{self.name}: {self.__dict__}'
 
   def __repr__(self):
-    return '%s @ 0x%x' % (type(self).__name__, id(self))
+    return self.name
 
   def add_child(self, child):
     """Add a child (low level).
