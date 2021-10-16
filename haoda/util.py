@@ -5,6 +5,8 @@ import signal
 from typing import (Any, Generator, Iterable, List, Optional, TextIO, Tuple,
                     TypeVar, Union)
 
+from absl import flags
+
 T = TypeVar('T')
 
 _logger = logging.getLogger().getChild(__name__)
@@ -327,3 +329,14 @@ def release_job_slot(job_server_fd: Union[int, Tuple[()],
   if job_server_fd is not None and os.write(job_server_fd, b'x') != 1:
     job_server_fd = None
   return job_server_fd
+
+
+def define_alias_flags(module: str) -> None:
+  """Define alias flags with dashes ('-') converted to underscores ('_')."""
+  names = {x.name for x in flags.FLAGS.get_flags_for_module(module)}
+  aliases = set()
+  for name in names:
+    alias = name.replace('-', '_')
+    if alias != name and alias not in names and alias not in aliases:
+      flags.DEFINE_alias(alias, name, module_name=module)
+      aliases.add(alias)
