@@ -2,8 +2,9 @@ import contextlib
 import logging
 import os
 import signal
-from typing import (Any, Generator, Iterable, List, Optional, TextIO, Tuple,
-                    TypeVar, Union)
+import tempfile
+from typing import (Any, Generator, Iterable, Iterator, List, Optional, TextIO,
+                    Tuple, TypeVar, Union)
 
 from absl import flags
 
@@ -340,3 +341,14 @@ def define_alias_flags(module: str) -> None:
     if alias != name and alias not in names and alias not in aliases:
       flags.DEFINE_alias(alias, name, module_name=module)
       aliases.add(alias)
+
+
+@contextlib.contextmanager
+def work_dir(path: Optional[str], *args, **kwargs) -> Iterator[str]:
+  """Create an optionally persistent work directory."""
+  if path:
+    os.makedirs(path, exist_ok=True)
+    yield path
+  else:
+    with tempfile.TemporaryDirectory(*args, **kwargs) as path:
+      yield path
