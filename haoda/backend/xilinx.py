@@ -14,6 +14,8 @@ import zipfile
 from typing import (BinaryIO, Dict, Iterable, Iterator, List, Mapping, Optional,
                     TextIO, Tuple, Union)
 
+import absl.flags
+
 from haoda import util
 from haoda.backend.common import Arg, Cat
 
@@ -353,6 +355,50 @@ def parse_device_info(
     if part_num is None:
       parser.error(f'either a valid {option_string_table[platform_name]} or '
                    f'a valid {option_string_table[part_num_name]} is required')
+    device_info = {
+        'clock_period': clock_period,
+        'part_num': part_num,
+    }
+  else:
+    device_info = get_device_info(platform)
+    if clock_period is not None:
+      device_info['clock_period'] = clock_period
+    if part_num is not None:
+      device_info['part_num'] = part_num
+  return device_info
+
+
+def parse_device_info_from_flags(
+    platform_name: str,
+    part_num_name: str,
+    clock_period_name: str,
+    flags: absl.flags.FlagValues = absl.flags.FLAGS,
+) -> Dict[str, str]:
+  platform = getattr(flags, platform_name)
+  part_num = getattr(flags, part_num_name)
+  clock_period = getattr(flags, clock_period_name)
+
+  if platform is not None:
+    platform = os.path.join(
+        os.path.dirname(platform),
+        os.path.basename(platform).replace(':', '_').replace('.', '_'))
+  if platform is not None:
+    for platform_dir in (
+        os.path.join('/', 'opt', 'xilinx'),
+        os.environ.get('XILINX_VITIS'),
+        os.environ.get('XILINX_SDX'),
+    ):
+      if not os.path.isdir(platform) and platform_dir is not None:
+        platform = os.path.join(platform_dir, 'platforms', platform)
+  if platform is None or not os.path.isdir(platform):
+    if clock_period is None:
+      raise absl.flags.IllegalFlagValueError(
+          f'either a valid --{platform_name} or '
+          f'a valid --{clock_period_name} is required')
+    if part_num is None:
+      raise absl.flags.IllegalFlagValueError(
+          f'either a valid --{platform_name} or '
+          f'a valid --{part_num_name} is required')
     device_info = {
         'clock_period': clock_period,
         'part_num': part_num,
