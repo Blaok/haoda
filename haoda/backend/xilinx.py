@@ -334,6 +334,7 @@ def parse_device_info(
       for x in getattr(parser, '_actions')
       if x.dest in {platform_name, part_num_name, clock_period_name}
   }
+  raw_platform_input = platform
 
   if platform is not None:
     platform = os.path.join(
@@ -347,14 +348,24 @@ def parse_device_info(
     ):
       if not os.path.isdir(platform) and platform_dir is not None:
         platform = os.path.join(platform_dir, 'platforms', platform)
+    if not os.path.isdir(platform):
+      parser.error(
+          f"cannot find the specified platform '{raw_platform_input}'; "
+          "are you sure it has been installed, "
+          "e.g., in '/opt/xilinx/platforms'?")
   if platform is None or not os.path.isdir(platform):
     if clock_period is None:
       parser.error(
-          f'either a valid {option_string_table[platform_name]} or '
-          f'a valid {option_string_table[clock_period_name]} is required')
+          'cannot determine the target clock period; '
+          f"please either specify '{option_string_table[platform_name]}' "
+          'so the target clock period can be extracted from it, or '
+          f"specify '{option_string_table[clock_period_name]}' directly")
     if part_num is None:
-      parser.error(f'either a valid {option_string_table[platform_name]} or '
-                   f'a valid {option_string_table[part_num_name]} is required')
+      parser.error(
+          'cannot determine the target part number; '
+          f"please either specify '{option_string_table[platform_name]}' "
+          'so the target part number can be extracted from it, or '
+          f"specify '{option_string_table[part_num_name]}' directly")
     device_info = {
         'clock_period': clock_period,
         'part_num': part_num,
@@ -377,6 +388,7 @@ def parse_device_info_from_flags(
   platform = getattr(flags, platform_name)
   part_num = getattr(flags, part_num_name)
   clock_period = getattr(flags, clock_period_name)
+  raw_platform_input = platform
 
   if platform is not None:
     platform = os.path.join(
@@ -390,15 +402,24 @@ def parse_device_info_from_flags(
     ):
       if not os.path.isdir(platform) and platform_dir is not None:
         platform = os.path.join(platform_dir, 'platforms', platform)
+    if not os.path.isdir(platform):
+      absl.flags.IllegalFlagValueError(
+          f"cannot find the specified platform '{raw_platform_input}'; "
+          "are you sure it has been installed, "
+          "e.g., in '/opt/xilinx/platforms'?")
   if platform is None or not os.path.isdir(platform):
     if clock_period is None:
       raise absl.flags.IllegalFlagValueError(
-          f'either a valid --{platform_name} or '
-          f'a valid --{clock_period_name} is required')
+          'cannot determine the target clock period; '
+          f"please either specify '--{platform_name}' "
+          'so the target clock period can be extracted from it, or '
+          f"specify '--{clock_period_name}' directly")
     if part_num is None:
       raise absl.flags.IllegalFlagValueError(
-          f'either a valid --{platform_name} or '
-          f'a valid --{part_num_name} is required')
+          'cannot determine the target part number; '
+          f"please either specify '--{platform_name}' "
+          'so the target part number can be extracted from it, or '
+          f"specify '--{part_num_name}' directly")
     device_info = {
         'clock_period': clock_period,
         'part_num': part_num,
