@@ -89,8 +89,8 @@ set tmp_ip_dir "{tmpdir}/tmp_ip_dir"
 set tmp_project "{tmpdir}/tmp_project"
 
 create_project -force kernel_pack ${{tmp_project}}
-add_files -norecurse [glob {hdl_dir}/*.v]
-foreach tcl_file [glob -nocomplain {hdl_dir}/*.tcl] {{
+add_files -norecurse [glob {hdl_dir}/*.v {hdl_dir}/*/*.v]
+foreach tcl_file [glob -nocomplain {hdl_dir}/*.tcl {hdl_dir}/*/*.tcl] {{
   source ${{tcl_file}}
 }}
 set_property top {top_name} [current_fileset]
