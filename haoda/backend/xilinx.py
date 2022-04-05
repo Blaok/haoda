@@ -150,10 +150,10 @@ class PackageXo(Vivado):
                iface_names: Iterable[str] = (S_AXI_NAME,),
                cpp_kernels=()):
     self.tmpdir = tempfile.TemporaryDirectory(prefix='package-xo-')
-    if _logger.isEnabledFor(logging.INFO):
+    if _logger.isEnabledFor(logging.DEBUG):
       for _, _, files in os.walk(hdl_dir):
         for filename in files:
-          _logger.info('packing: %s', filename)
+          _logger.debug('packing: %s', filename)
     iface_names = list(iface_names)
     iface_names.extend(M_AXI_PREFIX + x for x in m_axi_names)
     kwargs = {
