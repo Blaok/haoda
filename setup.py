@@ -17,7 +17,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='haoda',
-    version='0.0.20220404.dev1',
+    version='0.0.20220405.dev1',
     description='Hardware-aware optimization and design automation',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -35,7 +35,10 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Topic :: System :: Hardware',
     ],
-    packages=find_packages(exclude=('tests',)),
+    packages=find_packages(exclude=(
+        'tests.*',
+        'tests',
+    )),
     python_requires='>=3.6',
     install_requires=[
         'absl-py',
