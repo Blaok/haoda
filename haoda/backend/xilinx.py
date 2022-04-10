@@ -121,6 +121,8 @@ BUS_IFACE = r'''
 ipx::associate_bus_interfaces -busif {} -clock ap_clk [ipx::current_core]
 '''
 
+BUS_PARAM = 'set_property value {2} [ipx::add_bus_parameter {1} [ipx::get_bus_interfaces {0}]]\n'
+
 S_AXI_NAME = 's_axi_control'
 M_AXI_PREFIX = 'm_axi_'
 
@@ -136,32 +138,43 @@ class PackageXo(Vivado):
     top_name: Top-level module name.
     kernel_xml: Name of a xml file containing description of the kernel.
     hdl_dir: Directory name containing all HDL files.
-    m_axi_names: Variable names connected to the m_axi bus.
+    m_axi_names: Variable names connected to the m_axi bus, optionally with
+        values being key-value pairs of additional bus parameters.
     iface_names: Other interface names, default to (S_AXI_NAME,).
     cpp_kernels: File names of C++ kernels.
   """
 
-  def __init__(self,
-               xo_file: str,
-               top_name: str,
-               kernel_xml: str,
-               hdl_dir: str,
-               m_axi_names: Iterable[str] = (),
-               iface_names: Iterable[str] = (S_AXI_NAME,),
-               cpp_kernels=()):
+  def __init__(
+      self,
+      xo_file: str,
+      top_name: str,
+      kernel_xml: str,
+      hdl_dir: str,
+      m_axi_names: Union[Iterable[str], Dict[str, Dict[str, str]]] = (),
+      iface_names: Iterable[str] = (S_AXI_NAME,),
+      cpp_kernels=(),
+  ):
     self.tmpdir = tempfile.TemporaryDirectory(prefix='package-xo-')
     if _logger.isEnabledFor(logging.DEBUG):
       for _, _, files in os.walk(hdl_dir):
         for filename in files:
           _logger.debug('packing: %s', filename)
-    iface_names = list(iface_names)
-    iface_names.extend(M_AXI_PREFIX + x for x in m_axi_names)
+
+    bus_ifaces: List[str] = list(map(BUS_IFACE.format, iface_names))
+    for m_axi_name in m_axi_names:
+      m_axi_iface_name = M_AXI_PREFIX + m_axi_name
+      bus_ifaces.append(BUS_IFACE.format(m_axi_iface_name))
+      if not isinstance(m_axi_names, dict):
+        continue
+      for key, value in m_axi_names.get(m_axi_name, {}).items():
+        bus_ifaces.append(BUS_PARAM.format(m_axi_iface_name, key, value))
+
     kwargs = {
         'top_name': top_name,
         'kernel_xml': kernel_xml,
         'hdl_dir': hdl_dir,
         'xo_file': xo_file,
-        'bus_ifaces': ''.join(map(BUS_IFACE.format, iface_names)),
+        'bus_ifaces': ''.join(bus_ifaces),
         'tmpdir': self.tmpdir.name,
         'cpp_kernels': ''.join(map(' -kernel_files {}'.format, cpp_kernels))
     }
