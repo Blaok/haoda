@@ -196,6 +196,7 @@ create_clock -period {clock_period} -name default
 config_compile -name_max_length 253
 config_interface -m_axi_addr64
 {config}
+{other_configs}
 csynth_design
 exit
 '''
@@ -230,6 +231,7 @@ class RunHls(VivadoHls):
       auto_prefix: bool = False,
       hls: str = 'vivado_hls',
       std: str = 'c++11',
+      other_configs: str = '',
   ):
     self.project_dir = tempfile.TemporaryDirectory(
         prefix=f'run-hls-{top_name}-')
@@ -260,6 +262,7 @@ class RunHls(VivadoHls):
         'part_num': part_num,
         'clock_period': clock_period,
         'config': rtl_config,
+        'other_configs': other_configs,
     }
     super().__init__(HLS_COMMANDS.format(**kwargs), hls, self.project_dir.name)
 
