@@ -47,7 +47,7 @@ def simplify(expr, logger=None):
   if logger is not None:
     passes = compose(passes, lambda node: print_tree(node, logger))
 
-  if isinstance(expr, collections.Iterable):
+  if isinstance(expr, collections.abc.Iterable):
     return type(expr)(map(passes, expr))
 
   return passes(expr)

@@ -49,7 +49,7 @@ def get_instances_of(node_or_iterable, class_or_tuple):
       instances.append(node)
     return node
 
-  if isinstance(node_or_iterable, collections.Iterable):
+  if isinstance(node_or_iterable, collections.abc.Iterable):
     return sum(
         (get_instances_of(node, class_or_tuple) for node in node_or_iterable),
         ())
