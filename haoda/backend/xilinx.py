@@ -762,7 +762,7 @@ module {name} #(
   reg                     internal_empty_n;
   reg                     internal_full_n;
 
-  reg [DATA_WIDTH-1:0] mem [0:DEPTH-1];
+  (* shreg_extract = "yes" *) reg [DATA_WIDTH-1:0] mem [0:DEPTH-1];
 
   assign if_empty_n = internal_empty_n;
   assign if_full_n = internal_full_n;
