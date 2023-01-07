@@ -10,9 +10,9 @@ jobs:
 
     steps:
       - name: Setup Python
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v4
         with:
-          python-version: 3.6
+          python-version: "3.x"
       - name: Install setuptools and wheel
         run: pip install --upgrade setuptools wheel
       - name: Checkout myself
