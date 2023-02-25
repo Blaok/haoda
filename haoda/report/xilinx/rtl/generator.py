@@ -19,7 +19,8 @@ REPORT_UTIL_COMMANDS = r'''
 read_verilog [ glob {hdl_dir}/*.v ]
 set ips [ glob -nocomplain {hdl_dir}/*/*.xci ]
 if {{ $ips ne "" }} {{
-  read_ip $ips
+  import_ip $ips
+  upgrade_ip [get_ips *]
   generate_target synthesis [ get_files *.xci ]
 }}
 foreach tcl_file [glob -nocomplain {hdl_dir}/*.tcl] {{
