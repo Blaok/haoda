@@ -88,7 +88,7 @@ PACKAGEXO_COMMANDS = r'''
 set tmp_ip_dir "{tmpdir}/tmp_ip_dir"
 set tmp_project "{tmpdir}/tmp_project"
 
-create_project -force kernel_pack ${{tmp_project}}
+create_project -force kernel_pack ${{tmp_project}}{part_num}
 add_files -norecurse [glob {hdl_dir}/*.v {hdl_dir}/*/*.v {hdl_dir}/*.dat]
 foreach tcl_file [glob -nocomplain {hdl_dir}/*.tcl {hdl_dir}/*/*.tcl] {{
   source ${{tcl_file}}
@@ -142,6 +142,7 @@ class PackageXo(Vivado):
         values being key-value pairs of additional bus parameters.
     iface_names: Other interface names, default to (S_AXI_NAME,).
     cpp_kernels: File names of C++ kernels.
+    part_num: Part number of the target device.
   """
 
   def __init__(
@@ -152,7 +153,8 @@ class PackageXo(Vivado):
       hdl_dir: str,
       m_axi_names: Union[Iterable[str], Dict[str, Dict[str, str]]] = (),
       iface_names: Iterable[str] = (S_AXI_NAME,),
-      cpp_kernels=(),
+      cpp_kernels: Iterable[str] = (),
+      part_num: str = '',
   ):
     self.tmpdir = tempfile.TemporaryDirectory(prefix='package-xo-')
     if _logger.isEnabledFor(logging.DEBUG):
@@ -176,7 +178,8 @@ class PackageXo(Vivado):
         'xo_file': xo_file,
         'bus_ifaces': ''.join(bus_ifaces),
         'tmpdir': self.tmpdir.name,
-        'cpp_kernels': ''.join(map(' -kernel_files {}'.format, cpp_kernels))
+        'cpp_kernels': ''.join(map(' -kernel_files {}'.format, cpp_kernels)),
+        'part_num': f' -part {part_num}' if part_num else '',
     }
     super().__init__(PACKAGEXO_COMMANDS.format(**kwargs))
 
