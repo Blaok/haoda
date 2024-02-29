@@ -13,19 +13,21 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - "3.7"
           - "3.8"
           - "3.9"
           - "3.10"
           - "3.11"
+          - "3.12"
 
     steps:
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Checkout myself
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+      - name: Install setuptools
+        run: pip install --upgrade setuptools
       - name: Install myself
         run: python setup.py install
       - name: Run unit tests
@@ -38,13 +40,13 @@ jobs:
 
     steps:
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.x"
       - name: Install setuptools and wheel
         run: pip install --upgrade setuptools wheel
       - name: Checkout myself
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install myself
         run: python setup.py install
       - name: Run unit tests
