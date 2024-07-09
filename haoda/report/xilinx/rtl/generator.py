@@ -16,6 +16,7 @@ __all__ = (
 )
 
 REPORT_UTIL_COMMANDS = r'''
+set_part {{{part_num}}}
 read_verilog [ glob {hdl_dir}/*.v ]
 set ips [ glob -nocomplain {hdl_dir}/*/*.xci ]
 if {{ $ips ne "" }} {{
@@ -99,6 +100,7 @@ class ReportDirUtil(backend.Vivado):
         'synth_args': synth_args,
         'report_util_args': report_util_args,
         'set_parallel': '',
+        'part_num': part_num,
     }
     self.job_server_fd = util.get_job_server_fd(())
     if self.job_server_fd is not None:
